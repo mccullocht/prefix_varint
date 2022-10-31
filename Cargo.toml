@@ -6,3 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bytes = "1.2.1"
+
+[dev-dependencies]
+criterion = "0.4.0"
+rand = "0.8.5"
+
+[[bench]]
+name = "bench"
+harness = false
