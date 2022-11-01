@@ -1,7 +1,13 @@
 [package]
-name = "prefix_varint"
+name = "prefix_uvarint"
 version = "0.1.0"
+authors = ["Trevor McCulloch <mccullocht@gmail.com>"]
 edition = "2021"
+description = "Prefix based variable length integer coding."
+license = "MIT OR Apache-2.0"
+keywords = ["integer", "coding", "compression"]
+categories = ["compression"]
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

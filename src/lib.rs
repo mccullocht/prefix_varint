@@ -1,54 +1,39 @@
-/// TODO: module level comment with an explanation of the encoding and API usage.
-///
+//! This module implements a prefix-based variable length integer coding scheme.
+//!
+//! Unlike an [LEB128](https://en.wikipedia.org/wiki/LEB128)-style encoding scheme, this encoding
+//! uses a unary prefix code in the first byte of the value to indicate how many subsequent bytes
+//! need to be read followed by the big endian encoding of any remaining bytes. This improves
+//! coding speed compared to LEB128 by reducing the number of branches required to code longer
+//! values.
+//!
+//! `uvarint` methods code `u64` values, with values closer to zero producing smaller output.
+//! `varint` methods code `i64` values using a [Zigzag](https://en.wikipedia.org/wiki/Variable-length_quantity#Zigzag_encoding)
+//! encoding to ensure that small negative numbers produce small output.
+//!
+//! Coding methods are provided as extensions to the `bytes::{Buf,BufMut}` traits which are
+//! implemented for common in-memory byte stream types. Lower level methods that operate directly
+//! on pointers are also provided but come with caveats (may overread/overwrite).
+//!
+//! ```
+//! use bytes::Buf;
+//! use prefix_varint::{VarintBuf, VarintBufMut};
+//!
+//! let mut buf_mut = Vec::new();
+//! for v in (0..100).skip(3) {
+//!   buf_mut.put_prefix_uvarint(v);
+//! }
+//!
+//! // NB: need a mutable slice to use as VarintBuf
+//! let mut buf = buf_mut.as_slice();
+//! for v in (0..100).skip(3) {
+//!   assert_eq!(buf.get_prefix_uvarint(), Some(v));
+//! }
+//! assert!(!buf.has_remaining());
+//! ```
 use bytes::buf::{Buf, BufMut};
 
 /// Maximum number of bytes a single encoded uvarint will occupy.
 pub const MAX_LEN: usize = 9;
-
-/// Maximum value for a 1-byte tag (0 leading ones).
-// TODO: replace with MAX_VALUE[1]
-const TAG_1BYTE_MAX: u8 = 0x7f;
-
-// alt: make N leading zeros and invert.
-// so: 8, 7, 6, 5, 4, 3, 2, 1, 0
-// (1 << N) - 1 is good unless N is 0 or 8.
-// in terms of u8::MAX???
-fn make_tag_prefix<const N: usize>() -> u8 {
-    match N {
-        0 => 0b00000000u8,
-        1 => 0b10000000u8,
-        2 => 0b11000000u8,
-        3 => 0b11100000u8,
-        4 => 0b11110000u8,
-        5 => 0b11111000u8,
-        6 => 0b11111100u8,
-        7 => 0b11111110u8,
-        _ => 0b11111111u8,
-    }
-}
-
-// TODO: remove this in favor of VALUE_MASK.
-fn make_tag_value_mask<const N: usize>() -> u8 {
-    match N {
-        0 => 0b01111111u8,
-        1 => 0b00111111u8,
-        2 => 0b00011111u8,
-        3 => 0b00001111u8,
-        4 => 0b00000111u8,
-        5 => 0b00000011u8,
-        6 => 0b00000001u8,
-        _ => 0b00000000u8,
-    }
-}
-
-fn make_tag<const N: usize>(v: u64) -> u8 {
-    if N < 8 {
-        let v8: u8 = (v >> (N * 8)).try_into().unwrap();
-        (v8 & make_tag_value_mask::<N>()) | make_tag_prefix::<N>()
-    } else {
-        u8::MAX
-    }
-}
 
 /// Maps negative values to positive values, creating a sequence that alternates between negative
 /// and positive values. This makes the value more amenable to efficient prefix uvarint encoding.
@@ -137,7 +122,7 @@ pub unsafe fn encode_prefix_uvarint(v: u64, p: *mut u8) -> usize {
     }
 }
 
-/// Encodes `v` as a prefix uvarint to `p`.
+/// Encodes `v` as a prefix varint to `p`.
 ///
 /// This may write up to `MAX_LEN` bytes and may panic if fewer bytes are available.
 #[inline]
@@ -146,33 +131,27 @@ pub unsafe fn encode_prefix_varint(v: i64, p: *mut u8) -> usize {
 }
 
 fn put_prefix_uvarint_slow<B: bytes::BufMut + ?Sized>(b: &mut B, v: u64) {
-    if v < (1 << 14) {
-        b.put_u8(make_tag::<1>(v));
-        b.put_u8(v as u8);
-    } else if v < (1 << 21) {
-        b.put_u8(make_tag::<2>(v));
-        b.put_u16(v as u16)
-    } else if v < (1 << 28) {
-        b.put_u8(make_tag::<3>(v));
-        b.put_uint(v, 3)
-    } else if v < (1 << 35) {
-        b.put_u8(make_tag::<4>(v));
-        b.put_u32(v as u32)
-    } else if v < (1 << 42) {
-        b.put_u8(make_tag::<5>(v));
-        b.put_uint(v, 5)
-    } else if v < (1 << 49) {
-        b.put_u8(make_tag::<6>(v));
-        b.put_uint(v, 6)
-    } else if v < (1 << 56) {
-        b.put_u8(make_tag::<7>(v));
-        b.put_uint(v, 7)
+    if v < MAX_VALUE[2] {
+        b.put_u16((v | TAG_PREFIX[2]) as u16)
+    } else if v < MAX_VALUE[3] {
+        b.put_uint(v | TAG_PREFIX[3], 3)
+    } else if v < MAX_VALUE[4] {
+        b.put_u32((v | TAG_PREFIX[4]) as u32)
+    } else if v < MAX_VALUE[5] {
+        b.put_uint(v | TAG_PREFIX[5], 5)
+    } else if v < MAX_VALUE[6] {
+        b.put_uint(v | TAG_PREFIX[6], 6)
+    } else if v < MAX_VALUE[7] {
+        b.put_uint(v | TAG_PREFIX[7], 7)
+    } else if v < MAX_VALUE[8] {
+        b.put_u64(v | TAG_PREFIX[8])
     } else {
-        b.put_u8(make_tag::<8>(v));
+        b.put_u8(u8::MAX);
         b.put_u64(v)
     }
 }
 
+/// An extension to the `bytes::BufMut` trait to add prefix varint encoding methods.
 pub trait VarintBufMut: bytes::BufMut {
     /// Puts `v` into the buffer in a variable length encoding using 1-9 bytes.
     #[inline]
@@ -200,50 +179,35 @@ pub trait VarintBufMut: bytes::BufMut {
 // Implement for all tyeps that implement BufMut
 impl<B: BufMut + ?Sized> VarintBufMut for B {}
 
-/// Mask for an n-byte length value that removes prefix code bits.
-// TODO: replace with MAX_VALUE
-const VALUE_MASK: [u64; 10] = [
-    0x0,
-    0x7f,
-    0x3fff,
-    0x1fffff,
-    0xfffffff,
-    0x7ffffffff,
-    0x3ffffffffff,
-    0x1ffffffffffff,
-    0xffffffffffffff,
-    0xffffffffffffffff,
-];
-
 unsafe fn decode_prefix_uvarint_slow(tag: u8, p: *const u8) -> (u64, usize) {
     let (raw, len) = match tag.leading_ones() {
         // NB: zero is handled by decode_prefix_uvarint().
         1 => (
-            u16::from_be(std::ptr::read_unaligned(p as *const u16)).into(),
+            u64::from(u16::from_be(std::ptr::read_unaligned(p as *const u16))) & MAX_VALUE[2],
             2,
         ),
         2 => (
-            (u32::from_be(std::ptr::read_unaligned(p as *const u32)) >> 8).into(),
+            u64::from(u32::from_be(std::ptr::read_unaligned(p as *const u32)) >> 8) & MAX_VALUE[3],
             3,
         ),
         3 => (
-            u32::from_be(std::ptr::read_unaligned(p as *const u32)).into(),
+            u64::from(u32::from_be(std::ptr::read_unaligned(p as *const u32))) & MAX_VALUE[4],
             4,
         ),
         4 => (
-            (u64::from_be(std::ptr::read_unaligned(p as *const u64)) >> 24).into(),
+            (u64::from_be(std::ptr::read_unaligned(p as *const u64)) >> 24) & MAX_VALUE[5],
             5,
         ),
         5 => (
-            (u64::from_be(std::ptr::read_unaligned(p as *const u64)) >> 16).into(),
+            (u64::from_be(std::ptr::read_unaligned(p as *const u64)) >> 16) & MAX_VALUE[6],
             6,
         ),
         6 => (
-            (u64::from_be(std::ptr::read_unaligned(p as *const u64)) >> 8).into(),
+            (u64::from_be(std::ptr::read_unaligned(p as *const u64)) >> 8) & MAX_VALUE[7],
             7,
         ),
         7 => (
-            u64::from_be(std::ptr::read_unaligned(p as *const u64)).into(),
+            u64::from_be(std::ptr::read_unaligned(p as *const u64)) & MAX_VALUE[8],
             8,
         ),
         // NB: this is a catch-all but the maximum possible value for tag.leading_ones() is 8.
@@ -252,8 +216,10 @@ unsafe fn decode_prefix_uvarint_slow(tag: u8, p: *const u8) -> (u64, usize) {
             9,
         ),
     };
-    (raw & VALUE_MASK[len], len)
+    (raw, len)
 }
+
+const MAX_1BYTE_TAG: u8 = MAX_VALUE[1] as u8;
 
 /// Decodes a prefix uvarint value from `p`, returning the value and the number of bytes consumed.
 ///
@@ -261,7 +227,7 @@ unsafe fn decode_prefix_uvarint_slow(tag: u8, p: *const u8) -> (u64, usize) {
 #[inline]
 pub unsafe fn decode_prefix_uvarint(p: *const u8) -> (u64, usize) {
     let tag = std::ptr::read(p);
-    if tag <= TAG_1BYTE_MAX {
+    if tag <= MAX_1BYTE_TAG {
         return (tag.into(), 1);
     } else {
         decode_prefix_uvarint_slow(tag, p)
@@ -280,26 +246,27 @@ pub unsafe fn decode_prefix_varint(p: *const u8) -> (i64, usize) {
 fn get_prefix_uvarint_slow<B: Buf + ?Sized>(b: &mut B, tag: u8) -> Option<u64> {
     let remaining_bytes = tag.leading_ones() as usize;
     if b.remaining() < remaining_bytes {
+        b.advance(b.remaining());
         return None;
     }
 
     let raw = match remaining_bytes {
-        1 => (u64::from(tag & make_tag_value_mask::<1>()) << 8) | b.get_uint(1),
-        2 => (u64::from(tag & make_tag_value_mask::<2>()) << 16) | u64::from(b.get_u16()),
-        3 => (u64::from(tag & make_tag_value_mask::<3>()) << 24) | b.get_uint(3),
-        4 => (u64::from(tag & make_tag_value_mask::<4>()) << 32) | u64::from(b.get_u32()),
-        5 => (u64::from(tag & make_tag_value_mask::<5>()) << 40) | b.get_uint(5),
-        6 => (u64::from(tag & make_tag_value_mask::<6>()) << 48) | b.get_uint(6),
-        7 => (u64::from(tag & make_tag_value_mask::<7>()) << 56) | b.get_uint(7),
+        1 => ((u64::from(tag) << 8) | b.get_uint(1)) & MAX_VALUE[2],
+        2 => ((u64::from(tag) << 16) | u64::from(b.get_u16())) & MAX_VALUE[3],
+        3 => ((u64::from(tag) << 24) | b.get_uint(3)) & MAX_VALUE[4],
+        4 => ((u64::from(tag) << 32) | u64::from(b.get_u32())) & MAX_VALUE[5],
+        5 => ((u64::from(tag) << 40) | b.get_uint(5)) & MAX_VALUE[6],
+        6 => ((u64::from(tag) << 48) | b.get_uint(6)) & MAX_VALUE[7],
+        7 => ((u64::from(tag) << 56) | b.get_uint(7)) & MAX_VALUE[8],
         _ => b.get_u64(),
     };
     Some(raw)
 }
 
+/// An extension to the `bytes::Buf` trait to add prefix varint decoding methods.
 pub trait VarintBuf: bytes::Buf {
-    /// Reads a single value written by `VarintBufMut.put_prefix_uvarint()`.
-    /// Returns `None` if there are not enough remaining bytes to produce a value, in which case
-    /// the buffer may be left in an indeterminate state.
+    /// Reads a single prefix uvarint value from the buffer.
+    /// If the input is not long enough to produce a value, advances to the end and returns `None`.
     #[inline]
     fn get_prefix_uvarint(&mut self) -> Option<u64> {
         let buf = self.chunk();
@@ -311,7 +278,7 @@ pub trait VarintBuf: bytes::Buf {
             return None;
         } else {
             let tag = self.get_u8();
-            if tag <= TAG_1BYTE_MAX {
+            if tag <= MAX_1BYTE_TAG {
                 Some(tag.into())
             } else {
                 get_prefix_uvarint_slow(self, tag)
@@ -319,9 +286,8 @@ pub trait VarintBuf: bytes::Buf {
         }
     }
 
-    /// Reads a single value written by `VarintBufMut.put_prefix_varint()`.
-    /// Returns `None` if there are not enough remaining bytes to produce a value, in which case
-    /// the buffer may be left in an indeterminate state.
+    /// Reads a single prefix varint value from the buffer.
+    /// If the input is not long enough to produce a value, advances to the end and returns `None`.
     #[inline]
     fn get_prefix_varint(&mut self) -> Option<i64> {
         let v = self.get_prefix_uvarint()?;
@@ -490,5 +456,27 @@ mod test {
     test_random_encode_decode_varint!(varint_8byte, 36028797018963967);
     test_random_encode_decode_varint!(varint_9byte, 9223372036854775807);
 
-    // TODO: decoding tests for data loss cases.
+    #[test]
+    fn decode_empty_fail() {
+        assert_eq!([].as_slice().get_prefix_uvarint(), None);
+    }
+
+    #[test]
+    fn decode_tag_only_fail() {
+        let mut tag = u8::MAX;
+        while tag != 0 {
+            assert_eq!([tag].as_slice().get_prefix_uvarint(), None, "{:#b}", tag);
+            tag <<= 1;
+        }
+    }
+
+    #[test]
+    fn decode_truncated() {
+        for v in MAX_VALUE.iter().skip(1) {
+            let mut buf = Vec::new();
+            buf.put_prefix_uvarint(*v);
+            let mut trunc = &buf[0..(buf.len() - 1)];
+            assert_eq!(trunc.get_prefix_uvarint(), None, "{}", *v);
+        }
+    }
 }

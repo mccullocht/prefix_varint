@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use prefix_varint::{VarintBuf, VarintBufMut};
+use prefix_uvarint::{VarintBuf, VarintBufMut};
 use rand::distributions::Uniform;
 use rand::prelude::*;
 
