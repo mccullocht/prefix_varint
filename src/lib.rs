@@ -54,7 +54,7 @@ pub(crate) fn zigzag_decode(v: u64) -> i64 {
 
 /// Max value for an n-byte length.
 const MAX_VALUE: [u64; 10] = [
-    0x0,
+    0x0, // placeholder
     0x7f,
     0x3fff,
     0x1fffff,
@@ -68,8 +68,8 @@ const MAX_VALUE: [u64; 10] = [
 
 // Tag prefix value for an n-byte length to OR with the value.
 const TAG_PREFIX: [u64; 9] = [
-    0x0,
-    0x0,
+    0x0, // placeholder
+    0x0, // placeholder
     0x8000,
     0xc00000,
     0xe0000000,
@@ -234,7 +234,7 @@ pub(crate) const MAX_1BYTE_TAG: u8 = MAX_VALUE[1] as u8;
 pub unsafe fn decode_prefix_uvarint(p: *const u8) -> (u64, usize) {
     let tag = std::ptr::read(p);
     if tag <= MAX_1BYTE_TAG {
-        return (tag.into(), 1);
+        (tag.into(), 1)
     } else {
         decode_prefix_uvarint_slow(tag, p)
     }
@@ -281,7 +281,7 @@ pub trait VarintBuf: bytes::Buf {
             self.advance(len);
             Some(value)
         } else if !self.has_remaining() {
-            return None;
+            None
         } else {
             let tag = self.get_u8();
             if tag <= MAX_1BYTE_TAG {

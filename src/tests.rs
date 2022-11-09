@@ -41,7 +41,7 @@ mod raw {
 
 mod buf {
     use super::{bounds_i64, bounds_u64, generate_array, RANDOM_TEST_LEN};
-    use crate::{VarintBuf, VarintBufMut, MAX_VALUE};
+    use crate::{VarintBuf, VarintBufMut, MAX_VALUE, TAG_PREFIX};
 
     macro_rules! test_random_buf_put_get {
         ($name:ident, $bounds:ident, $put:ident, $get:ident) => {
@@ -95,6 +95,15 @@ mod buf {
             buf.put_prefix_uvarint(*v);
             let mut trunc = &buf[0..(buf.len() - 1)];
             assert_eq!(trunc.get_prefix_uvarint(), None, "{}", *v);
+        }
+    }
+
+    #[test]
+    fn max_val_and_tag_prefix_cancel() {
+        for i in 2..9 {
+            let tag = TAG_PREFIX[i];
+            let max = MAX_VALUE[i];
+            assert_eq!(tag & max, 0);
         }
     }
 }
