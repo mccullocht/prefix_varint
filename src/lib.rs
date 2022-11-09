@@ -117,7 +117,14 @@ unsafe fn encode_prefix_uvarint_slow(v: u64, p: *mut u8) -> usize {
 
 /// Encodes `v` as a prefix uvarint to `p`.
 ///
-/// This may write up to `MAX_LEN` bytes and may panic if fewer bytes are available.
+/// This may write up to `MAX_LEN` bytes and may panic if fewer bytes are
+/// available.
+///
+/// # Safety
+///
+/// This method may overread/overwrite memory if `p` is not at least `MAX_LEN`
+/// bytes long. It is the caller's responsibility to ensure that `p` is valid
+/// for writes of `MAX_LEN` bytes.
 #[inline]
 pub unsafe fn encode_prefix_uvarint(v: u64, p: *mut u8) -> usize {
     if v <= MAX_VALUE[1] {
@@ -130,7 +137,14 @@ pub unsafe fn encode_prefix_uvarint(v: u64, p: *mut u8) -> usize {
 
 /// Encodes `v` as a prefix varint to `p`.
 ///
-/// This may write up to `MAX_LEN` bytes and may panic if fewer bytes are available.
+/// This may write up to `MAX_LEN` bytes and may panic if fewer bytes are
+/// available.
+///
+/// # Safety
+///
+/// This method may overread/overwrite memory if `p` is not at least `MAX_LEN`
+/// bytes long. It is the caller's responsibility to ensure that `p` is valid
+/// for writes of `MAX_LEN` bytes.
 #[inline]
 pub unsafe fn encode_prefix_varint(v: i64, p: *mut u8) -> usize {
     encode_prefix_uvarint(zigzag_encode(v), p)
@@ -227,9 +241,17 @@ pub(crate) unsafe fn decode_prefix_uvarint_slow(tag: u8, p: *const u8) -> (u64, 
 
 pub(crate) const MAX_1BYTE_TAG: u8 = MAX_VALUE[1] as u8;
 
-/// Decodes a prefix uvarint value from `p`, returning the value and the number of bytes consumed.
+/// Decodes a prefix uvarint value from `p`, returning the value and the number
+/// of bytes consumed.
 ///
-/// This function may read up to `MAX_LEN` bytes from `p` and may panic if fewer bytes are available.
+/// This function may read up to `MAX_LEN` bytes from `p` and may panic if fewer
+/// bytes are available.
+///
+/// # Safety
+///
+/// This method may overread memory if `p` is not at least `MAX_LEN` bytes long.
+/// It is the caller's responsibility to ensure that `p` is valid for reads of
+/// `MAX_LEN` bytes.
 #[inline]
 pub unsafe fn decode_prefix_uvarint(p: *const u8) -> (u64, usize) {
     let tag = std::ptr::read(p);
@@ -240,9 +262,17 @@ pub unsafe fn decode_prefix_uvarint(p: *const u8) -> (u64, usize) {
     }
 }
 
-/// Decodes a prefix varint value from `p`, returning the value and the number of bytes consumed.
+/// Decodes a prefix varint value from `p`, returning the value and the number
+/// of bytes consumed.
 ///
-/// This function may read up to `MAX_LEN` bytes from `p` and may panic if fewer bytes are available.
+/// This function may read up to `MAX_LEN` bytes from `p` and may panic if fewer
+/// bytes are available.
+///
+/// # Safety
+///
+/// This method may overread memory if `p` is not at least `MAX_LEN` bytes long.
+/// It is the caller's responsibility to ensure that `p` is valid for reads of
+/// `MAX_LEN` bytes.
 #[inline]
 pub unsafe fn decode_prefix_varint(p: *const u8) -> (i64, usize) {
     let (v, len) = decode_prefix_uvarint(p);
