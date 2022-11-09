@@ -1,6 +1,11 @@
-# `prefix_uvarint`
+# prefix_uvarint
 
-This module implements a prefix-based variable length integer coding scheme.
+[![Crates.io][crates-badge]][crates-url]
+
+[crates-badge]: https://img.shields.io/crates/v/prefix_uvarint.svg
+[crates-url]: https://crates.io/crates/prefix_uvarint
+
+This crate implements a prefix-based variable length integer coding scheme.
 
 Unlike an [LEB128](https://en.wikipedia.org/wiki/LEB128)-style encoding scheme, this encoding
 uses a unary prefix code in the first byte of the value to indicate how many subsequent bytes
