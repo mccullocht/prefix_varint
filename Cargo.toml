@@ -7,7 +7,9 @@ description = "Prefix based variable length integer coding."
 license = "MIT OR Apache-2.0"
 keywords = ["integer", "coding", "compression"]
 categories = ["compression"]
-
+repository = "https://github.com/mccullocht/prefix_varint"
+homepage = "https://github.com/mccullocht/prefix_varint"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
