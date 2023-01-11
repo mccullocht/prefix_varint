@@ -43,13 +43,32 @@ pub const MAX_LEN: usize = 9;
 
 /// Maps negative values to positive values, creating a sequence that alternates between negative
 /// and positive values. This makes the value more amenable to efficient prefix uvarint encoding.
+#[inline]
 pub(crate) fn zigzag_encode(v: i64) -> u64 {
     ((v >> 63) ^ (v << 1)) as u64
 }
 
 /// Inverts `zigzag_encode()`.
+#[inline]
 pub(crate) fn zigzag_decode(v: u64) -> i64 {
     (v >> 1) as i64 ^ -(v as i64 & 1)
+}
+
+/// Return the number of bytes required to encode `v` in `[1,MAX_LEN]`.
+#[inline]
+pub fn prefix_uvarint_len(mut v: u64) -> usize {
+    // Mask off the top bit to cap bits_required to a maximum of 63.
+    // This avoids a branch to cap the maximum returned value of MAX_LEN.
+    v |= v >> 1;
+    v &= (1 << 63) - 1;
+    let bits_required = 64 - (v.leading_zeros() as usize);
+    ((bits_required.saturating_sub(1)) / 7) + 1
+}
+
+/// Return the number of bytes required to encode `v` in `[1,MAX_LEN]`.
+#[inline]
+pub fn prefix_varint_len(v: i64) -> usize {
+    prefix_uvarint_len(zigzag_encode(v))
 }
 
 /// Max value for an n-byte length.
