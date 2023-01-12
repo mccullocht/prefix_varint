@@ -25,14 +25,16 @@ const RANDOM_TEST_LEN: usize = 4096;
 
 mod raw {
     use super::bounds_u64;
-    use crate::{decode_prefix_uvarint, encode_prefix_uvarint, MAX_LEN};
+    use crate::{decode_prefix_uvarint, encode_prefix_uvarint, prefix_uvarint_len, MAX_LEN};
 
     #[test]
     fn boundary_coding() {
         let mut buf = [0u8; MAX_LEN];
         for (len, (min, max)) in bounds_u64().enumerate().map(|(i, x)| (i + 1, x)) {
+            assert_eq!(prefix_uvarint_len(min), len, "{}", min);
             assert_eq!(unsafe { encode_prefix_uvarint(min, buf.as_mut_ptr()) }, len);
             assert_eq!(unsafe { decode_prefix_uvarint(buf.as_ptr()) }, (min, len));
+            assert_eq!(prefix_uvarint_len(max), len, "{}", max);
             assert_eq!(unsafe { encode_prefix_uvarint(max, buf.as_mut_ptr()) }, len);
             assert_eq!(unsafe { decode_prefix_uvarint(buf.as_ptr()) }, (max, len));
         }
