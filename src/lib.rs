@@ -170,20 +170,9 @@ pub unsafe fn encode_prefix_varint(v: i64, p: *mut u8) -> usize {
 }
 
 fn put_prefix_uvarint_slow<B: bytes::BufMut + ?Sized>(b: &mut B, v: u64) {
-    if v < MAX_VALUE[2] {
-        b.put_u16((v | TAG_PREFIX[2]) as u16)
-    } else if v < MAX_VALUE[3] {
-        b.put_uint(v | TAG_PREFIX[3], 3)
-    } else if v < MAX_VALUE[4] {
-        b.put_u32((v | TAG_PREFIX[4]) as u32)
-    } else if v < MAX_VALUE[5] {
-        b.put_uint(v | TAG_PREFIX[5], 5)
-    } else if v < MAX_VALUE[6] {
-        b.put_uint(v | TAG_PREFIX[6], 6)
-    } else if v < MAX_VALUE[7] {
-        b.put_uint(v | TAG_PREFIX[7], 7)
-    } else if v < MAX_VALUE[8] {
-        b.put_u64(v | TAG_PREFIX[8])
+    if v <= MAX_VALUE[8] {
+        let len = prefix_uvarint_len(v);
+        b.put_uint(v | TAG_PREFIX[len], len);
     } else {
         b.put_u8(u8::MAX);
         b.put_u64(v)
@@ -195,14 +184,13 @@ pub trait VarintBufMut: bytes::BufMut {
     /// Puts `v` into the buffer in a variable length encoding using 1-9 bytes.
     #[inline]
     fn put_prefix_uvarint(&mut self, v: u64) {
-        let buf = self.chunk_mut();
-        if buf.len() >= MAX_LEN {
+        if v <= MAX_VALUE[1] {
+            self.put_u8(v as u8);
+        } else if self.chunk_mut().len() >= MAX_LEN {
             unsafe {
-                let len = encode_prefix_uvarint(v, buf.as_mut_ptr());
+                let len = encode_prefix_uvarint(v, self.chunk_mut().as_mut_ptr());
                 self.advance_mut(len);
             }
-        } else if v <= MAX_VALUE[1] {
-            self.put_u8(v as u8)
         } else {
             put_prefix_uvarint_slow(self, v)
         }
@@ -305,17 +293,8 @@ fn get_prefix_uvarint_slow<B: Buf + ?Sized>(b: &mut B, tag: u8) -> Option<u64> {
         return None;
     }
 
-    let raw = match remaining_bytes {
-        1 => ((u64::from(tag) << 8) | b.get_uint(1)) & MAX_VALUE[2],
-        2 => ((u64::from(tag) << 16) | u64::from(b.get_u16())) & MAX_VALUE[3],
-        3 => ((u64::from(tag) << 24) | b.get_uint(3)) & MAX_VALUE[4],
-        4 => ((u64::from(tag) << 32) | u64::from(b.get_u32())) & MAX_VALUE[5],
-        5 => ((u64::from(tag) << 40) | b.get_uint(5)) & MAX_VALUE[6],
-        6 => ((u64::from(tag) << 48) | b.get_uint(6)) & MAX_VALUE[7],
-        7 => ((u64::from(tag) << 56) | b.get_uint(7)) & MAX_VALUE[8],
-        _ => b.get_u64(),
-    };
-    Some(raw)
+    let raw = (u64::from(tag) << (remaining_bytes * 8)) | b.get_uint(remaining_bytes);
+    Some(raw & MAX_VALUE[remaining_bytes + 1])
 }
 
 /// Extensions for `bytes::Buf` trait to add prefix varint decoding methods.
@@ -324,13 +303,15 @@ pub trait VarintBuf: bytes::Buf {
     /// If the input is not long enough to produce a value, advances to the end and returns `None`.
     #[inline]
     fn get_prefix_uvarint(&mut self) -> Option<u64> {
+        if !self.has_remaining() {
+            return None;
+        }
+
         let buf = self.chunk();
         if buf.len() >= MAX_LEN {
             let (value, len) = unsafe { decode_prefix_uvarint(buf.as_ptr()) };
             self.advance(len);
             Some(value)
-        } else if !self.has_remaining() {
-            None
         } else {
             let tag = self.get_u8();
             if tag <= MAX_1BYTE_TAG {
