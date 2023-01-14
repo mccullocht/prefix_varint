@@ -303,22 +303,22 @@ pub trait VarintBuf: bytes::Buf {
     /// If the input is not long enough to produce a value, advances to the end and returns `None`.
     #[inline]
     fn get_prefix_uvarint(&mut self) -> Option<u64> {
-        if !self.has_remaining() {
-            return None;
-        }
-
         let buf = self.chunk();
         if buf.len() >= MAX_LEN {
             let (value, len) = unsafe { decode_prefix_uvarint(buf.as_ptr()) };
             self.advance(len);
-            Some(value)
+            return Some(value);
+        }
+
+        if !self.has_remaining() {
+            return None;
+        }
+
+        let tag = self.get_u8();
+        if tag <= MAX_1BYTE_TAG {
+            Some(tag.into())
         } else {
-            let tag = self.get_u8();
-            if tag <= MAX_1BYTE_TAG {
-                Some(tag.into())
-            } else {
-                get_prefix_uvarint_slow(self, tag)
-            }
+            get_prefix_uvarint_slow(self, tag)
         }
     }
 
