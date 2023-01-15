@@ -146,24 +146,22 @@ mod buf {
 
 mod io {
     use super::{generate_array, PrefixVarIntBounds, RANDOM_TEST_LEN};
-    use crate::io::VarintWrite;
+    use crate::io::{PrefixVarIntRead, PrefixVarIntWrite};
 
     macro_rules! test_random_io_write_read {
-        ($name:ident, $int:ty, $reader:ident, $write:ident, $read:ident) => {
+        ($name:ident, $int:ty) => {
             #[test]
             fn $name() {
-                use crate::io::$reader;
-
                 for (min, max) in <$int>::prefix_varint_bounds() {
                     let input_values = generate_array(RANDOM_TEST_LEN, min, max);
-                    let mut write: Vec<u8> = Vec::new();
+                    let mut writer: Vec<u8> = Vec::new();
                     for v in input_values.iter() {
-                        write.$write(*v).unwrap();
+                        writer.write_prefix_varint(*v).unwrap();
                     }
 
                     let mut output_values = Vec::new();
-                    let mut read = write.as_slice();
-                    while let Ok(v) = read.$read() {
+                    let mut reader = writer.as_slice();
+                    while let Ok(v) = reader.read_prefix_varint::<$int>() {
                         output_values.push(v);
                     }
 
@@ -172,32 +170,6 @@ mod io {
             }
         };
     }
-    test_random_io_write_read!(
-        random_read_u64,
-        u64,
-        VarintRead,
-        write_prefix_uvarint,
-        read_prefix_uvarint
-    );
-    test_random_io_write_read!(
-        random_read_i64,
-        i64,
-        VarintRead,
-        write_prefix_varint,
-        read_prefix_varint
-    );
-    test_random_io_write_read!(
-        random_bufread_u64,
-        u64,
-        VarintBufRead,
-        write_prefix_uvarint,
-        read_prefix_uvarint
-    );
-    test_random_io_write_read!(
-        random_bufread_i64,
-        i64,
-        VarintBufRead,
-        write_prefix_varint,
-        read_prefix_varint
-    );
+    test_random_io_write_read!(random_read_u64, u64);
+    test_random_io_write_read!(random_read_i64, i64);
 }
