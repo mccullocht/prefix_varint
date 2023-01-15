@@ -85,17 +85,6 @@ pub trait PrefixVarInt: Sized + Copy {
     fn decode_varint<B: Buf>(buf: &mut B) -> Result<Self, DecodeError>;
 }
 
-fn encode_to_buf_slow<B: BufMut>(v: u64, buf: &mut B) {
-    if v <= MAX_VALUE[8] {
-        let len = v.varint_len();
-        let raw = v | TAG_PREFIX[len];
-        buf.put_uint(raw, len);
-    } else {
-        buf.put_u8(u8::MAX);
-        buf.put_u64(v);
-    }
-}
-
 fn decode_from_buf_slow<B: Buf>(tag: u8, buf: &mut B) -> Result<u64, DecodeError> {
     let rem = tag.leading_ones() as usize;
 
@@ -130,7 +119,9 @@ impl PrefixVarInt for u64 {
                 buf.advance_mut(len);
             }
         } else {
-            encode_to_buf_slow(self, buf);
+            let mut enc = [0u8; MAX_LEN];
+            let len = unsafe { encode_prefix_uvarint_slow(self, enc.as_mut_ptr()) };
+            buf.put_slice(&enc[..len]);
         }
     }
 
