@@ -234,10 +234,8 @@ macro_rules! define_prefix_varint {
     };
 }
 
-define_prefix_varint!(u8, u64);
 define_prefix_varint!(u16, u64);
 define_prefix_varint!(u32, u64);
-define_prefix_varint!(i8, i64);
 define_prefix_varint!(i16, i64);
 define_prefix_varint!(i32, i64);
 
