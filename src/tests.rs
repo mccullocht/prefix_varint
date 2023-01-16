@@ -21,7 +21,12 @@ impl PrefixVarIntBounds for i64 {
     fn prefix_varint_bounds() -> Vec<(Self, Self)> {
         u64::prefix_varint_bounds()
             .into_iter()
-            .map(|(_, max)| (crate::zigzag_decode(max), crate::zigzag_decode(max - 1)))
+            .map(|(_, max)| {
+                (
+                    crate::core::zigzag_decode(max),
+                    crate::core::zigzag_decode(max - 1),
+                )
+            })
             .collect()
     }
 }
@@ -37,7 +42,7 @@ const RANDOM_TEST_LEN: usize = 4096;
 
 mod raw {
     use super::PrefixVarIntBounds;
-    use crate::{decode_prefix_uvarint, encode_prefix_uvarint, prefix_uvarint_len, MAX_LEN};
+    use crate::{raw, MAX_LEN};
 
     #[test]
     fn boundary_coding() {
@@ -47,12 +52,12 @@ mod raw {
             .enumerate()
             .map(|(i, x)| (i + 1, x))
         {
-            assert_eq!(prefix_uvarint_len(min), len, "{}", min);
-            assert_eq!(unsafe { encode_prefix_uvarint(min, buf.as_mut_ptr()) }, len);
-            assert_eq!(unsafe { decode_prefix_uvarint(buf.as_ptr()) }, (min, len));
-            assert_eq!(prefix_uvarint_len(max), len, "{}", max);
-            assert_eq!(unsafe { encode_prefix_uvarint(max, buf.as_mut_ptr()) }, len);
-            assert_eq!(unsafe { decode_prefix_uvarint(buf.as_ptr()) }, (max, len));
+            assert_eq!(raw::len(min), len, "{}", min);
+            assert_eq!(unsafe { raw::encode(min, buf.as_mut_ptr()) }, len);
+            assert_eq!(unsafe { raw::decode(buf.as_ptr()) }, (min, len));
+            assert_eq!(raw::len(max), len, "{}", max);
+            assert_eq!(unsafe { raw::encode(max, buf.as_mut_ptr()) }, len);
+            assert_eq!(unsafe { raw::decode(buf.as_ptr()) }, (max, len));
         }
     }
 }

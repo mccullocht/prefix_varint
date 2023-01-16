@@ -1,8 +1,7 @@
 //! Traits that allow writing/reading `PrefixVarInt` types on `bytes::{BufMut,Buf}`.
 
-use crate::{
-    decode_prefix_uvarint, DecodeError, PrefixVarInt, MAX_1BYTE_TAG, MAX_LEN, MAX_VALUE, TAG_PREFIX,
-};
+use crate::{raw, DecodeError, PrefixVarInt, MAX_1BYTE_TAG, MAX_LEN, MAX_VALUE, TAG_PREFIX};
+
 use bytes::{Buf, BufMut};
 
 fn put_prefix_varint_slow<B: BufMut>(v: u64, buf: &mut B) -> usize {
@@ -30,7 +29,7 @@ impl<Inner: BufMut> PrefixVarIntBufMut for Inner {
             self.put_u8(raw as u8);
         } else if self.chunk_mut().len() >= MAX_LEN {
             unsafe {
-                let len = crate::encode_prefix_uvarint_slow(raw, self.chunk_mut().as_mut_ptr());
+                let len = raw::encode_multibyte(raw, self.chunk_mut().as_mut_ptr());
                 self.advance_mut(len);
             }
         } else {
@@ -65,7 +64,7 @@ impl<Inner: Buf> PrefixVarIntBuf for Inner {
         }
 
         if self.chunk().len() >= MAX_LEN || self.remaining() == self.chunk().len() {
-            let (raw, len) = unsafe { decode_prefix_uvarint(self.chunk().as_ptr()) };
+            let (raw, len) = unsafe { raw::decode(self.chunk().as_ptr()) };
             self.advance(len);
             return PV::from_prefix_varint_raw(raw).ok_or(DecodeError::Overflow);
         }
