@@ -59,7 +59,9 @@ mod raw {
 
 mod buf {
     use super::{generate_array, PrefixVarIntBounds, RANDOM_TEST_LEN};
-    use crate::{DecodeError, PrefixVarInt, MAX_VALUE, TAG_PREFIX};
+    use crate::{
+        DecodeError, PrefixVarInt, PrefixVarIntBuf, PrefixVarIntBufMut, MAX_VALUE, TAG_PREFIX,
+    };
 
     macro_rules! test_random_buf_put_get {
         ($int:ty, $name:ident) => {
@@ -69,13 +71,13 @@ mod buf {
                     let input_values = generate_array(RANDOM_TEST_LEN, min, max);
                     let mut buf_mut: Vec<u8> = Vec::new();
                     for v in input_values.iter() {
-                        v.encode_varint(&mut buf_mut);
+                        buf_mut.put_prefix_varint(*v);
                     }
 
-                    let mut output_values = Vec::new();
+                    let mut output_values: Vec<$int> = vec![];
                     let mut buf = buf_mut.as_slice();
                     for _ in 0..input_values.len() {
-                        output_values.push(<$int>::decode_varint(&mut buf).unwrap());
+                        output_values.push(buf.get_prefix_varint().unwrap());
                     }
 
                     assert_eq!(input_values, output_values, "{}..{}", min, max);
@@ -90,7 +92,7 @@ mod buf {
     #[test]
     fn decode_empty_fail() {
         assert_eq!(
-            u64::decode_varint(&mut [].as_slice()),
+            u64::decode_prefix_varint(&mut [].as_slice()),
             Err(DecodeError::UnexpectedEob)
         );
     }
@@ -100,7 +102,7 @@ mod buf {
         let mut tag = u8::MAX;
         while tag != 0 {
             assert_eq!(
-                u64::decode_varint(&mut [tag].as_slice()),
+                u64::decode_prefix_varint(&mut [tag].as_slice()),
                 Err(DecodeError::UnexpectedEob),
                 "{:#b}",
                 tag
@@ -113,10 +115,10 @@ mod buf {
     fn decode_truncated() {
         for v in MAX_VALUE.iter().skip(1) {
             let mut buf = Vec::new();
-            v.encode_varint(&mut buf);
+            buf.put_prefix_varint(*v);
             let mut trunc = &buf[0..(buf.len() - 1)];
             assert_eq!(
-                u64::decode_varint(&mut trunc),
+                u64::decode_prefix_varint(&mut trunc),
                 Err(DecodeError::UnexpectedEob),
                 "{}",
                 *v
@@ -127,9 +129,9 @@ mod buf {
     #[test]
     fn decode_overflow() {
         let mut buf = Vec::new();
-        u64::MAX.encode_varint(&mut buf);
+        buf.put_prefix_varint(u64::MAX);
         assert_eq!(
-            u32::decode_varint(&mut buf.as_slice()),
+            u32::decode_prefix_varint(&mut buf.as_slice()),
             Err(DecodeError::Overflow)
         );
     }

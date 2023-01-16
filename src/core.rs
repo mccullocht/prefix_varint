@@ -67,7 +67,7 @@ fn decode_prefix_varint_raw(buf: &[u8]) -> Result<(u64, usize), crate::DecodeErr
     let len = tag.leading_ones() as usize + 1;
     if len <= buf.len() {
         let mut ibuf = [0u8; crate::MAX_LEN];
-        ibuf[..len].copy_from_slice(buf);
+        ibuf[..len].copy_from_slice(&buf[..len]);
         Ok(unsafe { crate::decode_prefix_uvarint_slow(tag, ibuf.as_ptr()) })
     } else {
         Err(crate::DecodeError::UnexpectedEob)

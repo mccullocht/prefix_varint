@@ -38,24 +38,23 @@ pub trait PrefixVarIntRead {
 impl<Inner: BufRead> PrefixVarIntRead for Inner {
     #[inline]
     fn read_prefix_varint<PV: PrefixVarInt>(&mut self) -> Result<PV> {
-        let mut buf = self.fill_buf()?;
+        let buf = self.fill_buf()?;
         if buf.len() >= MAX_LEN {
-            // XXX this is hellaciously unergonomic.
-            let old_len = buf.len();
-            let v = PV::decode_varint(&mut buf).map_err(|e| Error::from(e))?;
-            let len = old_len - buf.len();
+            let (v, len) = PV::decode_prefix_varint(buf).map_err(|e| Error::from(e))?;
             self.consume(len);
             Ok(v)
         } else {
             let mut buf = [0u8; MAX_LEN];
             self.read_exact(&mut buf[..1])?;
-            // XXX find a solution that allows us to bail early when buf[0] <= MAX_1BYTE_TAG
-            // this will also be a problem if PrefixVarInt stop encoding directly to BufMut.
-            let rem = buf[0].leading_ones() as usize;
-            if rem > 0 {
-                self.read_exact(&mut buf[1..(1 + rem)])?;
+            let tag = buf[0];
+            if tag <= crate::MAX_1BYTE_TAG {
+                return PV::from_prefix_varint_raw(tag.into()).ok_or(DecodeError::Overflow.into());
             }
-            PV::decode_varint(&mut buf.as_slice()).map_err(|e| e.into())
+            let rem = tag.leading_ones() as usize;
+            self.read_exact(&mut buf[1..(1 + rem)])?;
+            PV::decode_prefix_varint(buf.as_slice())
+                .map(|(v, _)| v)
+                .map_err(|e| e.into())
         }
     }
 }
