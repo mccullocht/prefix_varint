@@ -88,7 +88,7 @@ pub trait PrefixVarInt: Sized + Copy + Int {
     ///
     /// # Panics
     ///
-    /// If `self.prefix_varint_len() > buf.len()`.
+    /// If `self.prefix_varint_len() > buf.remaining()`.
     fn encode_prefix_varint(self, buf: &mut [u8]) -> usize {
         if buf.len() >= crate::MAX_LEN {
             unsafe { crate::encode_prefix_uvarint(self.to_prefix_varint_raw(), buf.as_mut_ptr()) }

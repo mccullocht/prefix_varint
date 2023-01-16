@@ -16,16 +16,16 @@
 //!
 //! ```
 //! use bytes::Buf;
-//! use prefix_uvarint::PrefixVarInt;
+//! use prefix_uvarint::{PrefixVarIntBufMut, PrefixVarIntBuf};
 //!
 //! let mut buf_mut = Vec::new();
 //! for v in (0..100).step_by(3) {
-//!   v.encode_varint(&mut buf_mut);
+//!   buf_mut.put_prefix_varint(v);
 //! }
 //!
 //! // NB: need a mutable slice to use as VarintBuf
 //! let mut buf = buf_mut.as_slice();
-//! while let Ok(v) = u64::decode_varint(&mut buf) {
+//! while let Ok(v) = buf.get_prefix_varint::<u64>() {
 //!   assert_eq!(v % 3, 0);
 //! }
 //! assert!(!buf.has_remaining());
@@ -40,9 +40,11 @@ pub use crate::io::{PrefixVarIntRead, PrefixVarIntWrite};
 
 use bytes::buf::{Buf, BufMut};
 
+// XXX move to core, reexport in lib.
 /// Maximum number of bytes a single encoded uvarint will occupy.
 pub const MAX_LEN: usize = 9;
 
+// XXX move to core, reexport in lib.
 /// Errors that may occur during decoding.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum DecodeError {
@@ -76,6 +78,7 @@ impl std::error::Error for DecodeError {
 }
 
 /// A single encoded prefix varint value for with `PrefixVarInt.to_prefix_varint_bytes()`.
+/// XXX move to core, reexport in lib.
 pub struct EncodedPrefixVarint {
     buf: [u8; MAX_LEN],
     len: u8,
@@ -103,11 +106,25 @@ impl Default for EncodedPrefixVarint {
     }
 }
 
+// XXX move to bytes, reexport in lib
+fn put_prefix_varint_slow<B: BufMut>(v: u64, buf: &mut B) -> usize {
+    if v <= MAX_VALUE[8] {
+        let len = v.prefix_varint_len();
+        buf.put_uint(v | TAG_PREFIX[len], len);
+        len
+    } else {
+        buf.put_u8(u8::MAX);
+        buf.put_u64(v);
+        9
+    }
+}
+
 pub trait PrefixVarIntBufMut {
     fn put_prefix_varint<PV: PrefixVarInt>(&mut self, v: PV);
 }
 
 impl<Inner: BufMut> PrefixVarIntBufMut for Inner {
+    #[inline]
     fn put_prefix_varint<PV: PrefixVarInt>(&mut self, v: PV) {
         let raw = v.to_prefix_varint_raw();
         if raw <= MAX_VALUE[1] {
@@ -118,8 +135,21 @@ impl<Inner: BufMut> PrefixVarIntBufMut for Inner {
                 self.advance_mut(len);
             }
         } else {
-            self.put_slice(raw.to_prefix_varint_bytes().as_slice());
+            put_prefix_varint_slow(raw, self);
         }
+    }
+}
+
+fn get_prefix_varint_slow<B: Buf>(tag: u8, buf: &mut B) -> Result<u64, DecodeError> {
+    let rem = tag.leading_ones() as usize;
+    if rem > buf.remaining() {
+        buf.advance(buf.remaining());
+        Err(DecodeError::UnexpectedEob)
+    } else if rem < 8 {
+        let raw = (u64::from(tag) << (rem * 8)) | buf.get_uint(rem);
+        Ok(raw & MAX_VALUE[rem + 1])
+    } else {
+        Ok(buf.get_u64())
     }
 }
 
@@ -128,34 +158,29 @@ pub trait PrefixVarIntBuf {
 }
 
 impl<Inner: Buf> PrefixVarIntBuf for Inner {
+    #[inline]
     fn get_prefix_varint<PV: PrefixVarInt>(&mut self) -> Result<PV, DecodeError> {
         if self.remaining() == 0 {
             return Err(DecodeError::UnexpectedEob);
         }
 
         if self.chunk().len() >= MAX_LEN || self.remaining() == self.chunk().len() {
-            let (v, len) = PV::decode_prefix_varint(self.chunk())?;
+            let (raw, len) = unsafe { decode_prefix_uvarint(self.chunk().as_ptr()) };
             self.advance(len);
-            return Ok(v);
+            return PV::from_prefix_varint_raw(raw).ok_or(DecodeError::Overflow);
         }
 
         let tag = self.get_u8();
         if tag <= MAX_1BYTE_TAG {
-            return PV::from_prefix_varint_raw(tag.into()).ok_or(DecodeError::Overflow);
+            PV::from_prefix_varint_raw(tag.into()).ok_or(DecodeError::Overflow)
+        } else {
+            PV::from_prefix_varint_raw(get_prefix_varint_slow(tag, self)?)
+                .ok_or(DecodeError::Overflow)
         }
-
-        let rem = tag.leading_ones() as usize;
-        if rem > self.remaining() {
-            return Err(DecodeError::UnexpectedEob);
-        }
-        // XXX consider doing this in a more efficient way rather than being expedient.
-        let mut ibuf = [0u8; MAX_LEN];
-        ibuf[0] = tag;
-        self.copy_to_slice(&mut ibuf[1..(rem + 1)]);
-        PV::decode_prefix_varint(ibuf.as_slice()).map(|(v, _)| v)
     }
 }
 
+// XXX move to core
 /// Maps negative values to positive values, creating a sequence that alternates between negative
 /// and positive values. This makes the value more amenable to efficient prefix uvarint encoding.
 #[inline]
@@ -163,12 +188,14 @@ pub(crate) fn zigzag_encode(v: i64) -> u64 {
     ((v >> 63) ^ (v << 1)) as u64
 }
 
+// XXX move to core
 /// Inverts `zigzag_encode()`.
 #[inline]
 pub(crate) fn zigzag_decode(v: u64) -> i64 {
     (v >> 1) as i64 ^ -(v as i64 & 1)
 }
 
+// XXX move to core.
 /// Return the number of bytes required to encode `v` in `[1,MAX_LEN]`.
 #[inline]
 pub fn prefix_uvarint_len(mut v: u64) -> usize {
@@ -186,6 +213,7 @@ pub fn prefix_varint_len(v: i64) -> usize {
     prefix_uvarint_len(zigzag_encode(v))
 }
 
+// XXX move to core.
 /// Max value for an n-byte length.
 const MAX_VALUE: [u64; 10] = [
     0x0, // placeholder
@@ -200,7 +228,8 @@ const MAX_VALUE: [u64; 10] = [
     0xffffffffffffffff,
 ];
 
-// Tag prefix value for an n-byte length to OR with the value.
+// XXX move to core.
+/// Tag prefix value for an n-byte length to OR with the value.
 const TAG_PREFIX: [u64; 9] = [
     0x0, // placeholder
     0x0, // placeholder

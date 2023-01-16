@@ -64,6 +64,7 @@ fn benchmark(c: &mut Criterion) {
                 encoded.put_prefix_varint(v);
             }
             g.bench_with_input(
+                // XXX fix name
                 format!("max_bytes{}/get_prefix_uvarint", max_bytes),
                 encoded.as_slice(),
                 |b, e| {
