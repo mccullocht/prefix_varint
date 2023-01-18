@@ -2,8 +2,6 @@
 //!
 //! Other types should be shuffled to/from raw values using the `core::Int` trait.
 
-use crate::{MAX_1BYTE_TAG, MAX_VALUE};
-
 /// Return the number of bytes required to encode `v` in `[1,MAX_LEN]`.
 #[inline]
 pub(crate) const fn len(mut v: u64) -> usize {
@@ -92,43 +90,35 @@ pub unsafe fn encode(v: u64, p: *mut u8) -> usize {
 ///
 /// This assumes that bytes `p..=(p + MAX_LEN)` may be read from.
 pub(crate) unsafe fn decode_multibyte(tag: u8, p: *const u8) -> (u64, usize) {
-    let (raw, len) = match tag.leading_ones() {
-        // NB: zero is handled by decode_prefix_uvarint().
-        1 => (
-            u64::from(u16::from_be(std::ptr::read_unaligned(p as *const u16))) & MAX_VALUE[2],
+    if tag < 0b11000000 {
+        (
+            u64::from(u16::from_be(std::ptr::read_unaligned(p as *const u16))) & max_value(2),
             2,
-        ),
-        2 => (
-            u64::from(u32::from_be(std::ptr::read_unaligned(p as *const u32)) >> 8) & MAX_VALUE[3],
+        )
+    } else if tag < 0b11100000 {
+        (
+            u64::from(u32::from_be(std::ptr::read_unaligned(p as *const u32)) >> 8) & max_value(3),
             3,
-        ),
-        3 => (
-            u64::from(u32::from_be(std::ptr::read_unaligned(p as *const u32))) & MAX_VALUE[4],
+        )
+    } else if tag < 0b11110000 {
+        (
+            u64::from(u32::from_be(std::ptr::read_unaligned(p as *const u32))) & max_value(4),
             4,
-        ),
-        4 => (
-            (u64::from_be(std::ptr::read_unaligned(p as *const u64)) >> 24) & MAX_VALUE[5],
-            5,
-        ),
-        5 => (
-            (u64::from_be(std::ptr::read_unaligned(p as *const u64)) >> 16) & MAX_VALUE[6],
-            6,
-        ),
-        6 => (
-            (u64::from_be(std::ptr::read_unaligned(p as *const u64)) >> 8) & MAX_VALUE[7],
-            7,
-        ),
-        7 => (
-            u64::from_be(std::ptr::read_unaligned(p as *const u64)) & MAX_VALUE[8],
-            8,
-        ),
-        // NB: this is a catch-all but the maximum possible value for tag.leading_ones() is 8.
-        _ => (
+        )
+    } else if tag < 0b11111111 {
+        let len = tag.leading_ones() as usize + 1;
+        let shift = (8 - len) * 8;
+        let mask = !(u64::MAX << (len * 7));
+        (
+            (u64::from_be(std::ptr::read_unaligned(p as *const u64)) >> shift) & mask,
+            len,
+        )
+    } else {
+        (
             u64::from_be(std::ptr::read_unaligned(p.add(1) as *const u64)),
             9,
-        ),
-    };
-    (raw, len)
+        )
+    }
 }
 
 /// Decode a prefix uvarint value from `p`, returning the raw value and number of bytes consumed.
@@ -139,7 +129,7 @@ pub(crate) unsafe fn decode_multibyte(tag: u8, p: *const u8) -> (u64, usize) {
 #[inline]
 pub unsafe fn decode(p: *const u8) -> (u64, usize) {
     let tag = std::ptr::read(p);
-    if tag <= MAX_1BYTE_TAG {
+    if tag <= max_value(1) as u8 {
         (tag.into(), 1)
     } else {
         decode_multibyte(tag, p)
