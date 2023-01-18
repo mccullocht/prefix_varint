@@ -2,17 +2,33 @@
 //!
 //! Other types should be shuffled to/from raw values using the `core::Int` trait.
 
-use crate::{MAX_1BYTE_TAG, MAX_VALUE, TAG_PREFIX};
+use crate::{MAX_1BYTE_TAG, MAX_VALUE};
 
 /// Return the number of bytes required to encode `v` in `[1,MAX_LEN]`.
 #[inline]
-pub(crate) fn len(mut v: u64) -> usize {
+pub(crate) const fn len(mut v: u64) -> usize {
     // Mask off the top bit to cap bits_required to a maximum of 63.
     // This avoids a branch to cap the maximum returned value of MAX_LEN.
     v |= v >> 1;
-    v &= (1 << 63) - 1;
+    v &= !(1 << 63);
     let bits_required = 64 - (v.leading_zeros() as usize);
+    // XXX could avoid saturating sub by doing v | 1.
     ((bits_required.saturating_sub(1)) / 7) + 1
+}
+
+#[inline(always)]
+const fn tag_prefix(len: usize) -> u64 {
+    !(u64::MAX >> (len - 1))
+}
+
+/// Returns the maximum value for a given byte length. Useful for masking out tag bits.
+#[inline(always)]
+const fn max_value(len: usize) -> u64 {
+    if len >= 9 {
+        u64::MAX
+    } else {
+        !(u64::MAX << (len * 7))
+    }
 }
 
 /// Encodes a raw value that produce multiple bytes of output.
@@ -23,34 +39,28 @@ pub(crate) fn len(mut v: u64) -> usize {
 ///
 /// This assumes that bytes `p..=(p + MAX_LEN)` may be written to.
 pub(crate) unsafe fn encode_multibyte(v: u64, p: *mut u8) -> usize {
-    if v <= MAX_VALUE[2] {
-        let tv = (v | TAG_PREFIX[2]) as u16;
-        std::ptr::write_unaligned(p as *mut u16, tv.to_be());
+    if v <= max_value(2) {
+        let tag_prefix = tag_prefix(2) >> 48;
+        let tagged = (v | tag_prefix) as u16;
+        std::ptr::write_unaligned(p as *mut u16, tagged.to_be());
         2
-    } else if v <= MAX_VALUE[3] {
-        let tv = ((v | TAG_PREFIX[3]) << 8) as u32;
-        std::ptr::write_unaligned(p as *mut u32, tv.to_be());
+    } else if v <= max_value(3) {
+        let tag_prefix = tag_prefix(3) >> 32;
+        let tagged = (tag_prefix | (v << 8)) as u32;
+        std::ptr::write_unaligned(p as *mut u32, tagged.to_be());
         3
-    } else if v <= MAX_VALUE[4] {
-        let tv = (v | TAG_PREFIX[4]) as u32;
-        std::ptr::write_unaligned(p as *mut u32, tv.to_be());
+    } else if v <= max_value(4) {
+        let tag_prefix = tag_prefix(4) >> 32;
+        let tagged = (tag_prefix | v) as u32;
+        std::ptr::write_unaligned(p as *mut u32, tagged.to_be());
         4
-    } else if v <= MAX_VALUE[5] {
-        let tv = (v | TAG_PREFIX[5]) << 24;
-        std::ptr::write_unaligned(p as *mut u64, tv.to_be());
-        5
-    } else if v <= MAX_VALUE[6] {
-        let tv = (v | TAG_PREFIX[6]) << 16;
-        std::ptr::write_unaligned(p as *mut u64, tv.to_be());
-        6
-    } else if v <= MAX_VALUE[7] {
-        let tv = (v | TAG_PREFIX[7]) << 8;
-        std::ptr::write_unaligned(p as *mut u64, tv.to_be());
-        7
-    } else if v <= MAX_VALUE[8] {
-        let tv = v | TAG_PREFIX[8];
-        std::ptr::write_unaligned(p as *mut u64, tv.to_be());
-        8
+    } else if v <= max_value(8) {
+        // This is a shortcut for len() where we assume the result is in 1..=8 (true here)
+        let len = (70 - v.leading_zeros()) as usize / 7;
+        let tag_prefix = tag_prefix(len);
+        let tagged = tag_prefix | (v << (64 - (len * 8)));
+        std::ptr::write_unaligned(p as *mut u64, tagged.to_be());
+        len
     } else {
         std::ptr::write(p, u8::MAX);
         std::ptr::write_unaligned(p.add(1) as *mut u64, v.to_be());
@@ -65,7 +75,7 @@ pub(crate) unsafe fn encode_multibyte(v: u64, p: *mut u8) -> usize {
 /// This assumes that bytes `p..=(p + MAX_LEN)` may be written to.
 #[inline]
 pub unsafe fn encode(v: u64, p: *mut u8) -> usize {
-    if v <= MAX_VALUE[1] {
+    if v <= max_value(1) {
         std::ptr::write(p, v as u8);
         1
     } else {
