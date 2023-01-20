@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use prefix_uvarint::{PrefixVarIntBuf, PrefixVarIntBufMut};
+use prefix_uvarint::{PrefixVarInt, PrefixVarIntBuf, PrefixVarIntBufMut};
 use rand::distributions::{Uniform, WeightedIndex};
 use rand::prelude::*;
 
@@ -74,6 +74,16 @@ fn benchmark(c: &mut Criterion) {
                             b.get_prefix_varint::<u64>().unwrap();
                         }
                         assert!(b.is_empty());
+                    })
+                },
+            );
+
+            g.bench_with_input(
+                format!("max_bytes{}/len", max_bytes),
+                &input_value,
+                |b, iv| {
+                    b.iter(|| {
+                        assert!(iv.iter().map(|v| v.prefix_varint_len()).sum::<usize>() > 0);
                     })
                 },
             );
