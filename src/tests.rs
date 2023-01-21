@@ -42,7 +42,7 @@ const RANDOM_TEST_LEN: usize = 4096;
 
 mod raw {
     use super::PrefixVarIntBounds;
-    use crate::{raw, MAX_LEN};
+    use crate::{raw, PrefixVarInt, MAX_LEN};
 
     #[test]
     fn boundary_coding() {
@@ -52,10 +52,10 @@ mod raw {
             .enumerate()
             .map(|(i, x)| (i + 1, x))
         {
-            assert_eq!(raw::len(min), len, "{}", min);
+            assert_eq!(min.prefix_varint_len(), len, "{}", min);
             assert_eq!(unsafe { raw::encode(min, buf.as_mut_ptr()) }, len);
             assert_eq!(unsafe { raw::decode(buf.as_ptr()) }, (min, len));
-            assert_eq!(raw::len(max), len, "{}", max);
+            assert_eq!(max.prefix_varint_len(), len, "{}", max);
             assert_eq!(unsafe { raw::encode(max, buf.as_mut_ptr()) }, len);
             assert_eq!(unsafe { raw::decode(buf.as_ptr()) }, (max, len));
         }

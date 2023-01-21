@@ -4,8 +4,8 @@
 
 const fn len_slow(v: u64) -> usize {
     if v < (1 << 63) {
-        // Dividing by 7 triggers an optimization that yield a multiply instruction plus multiple
-        // shifts and masks to produce the value and this is slower than the encode path.
+        // Dividing by 7 triggers an optimization that yields a multiply instruction plus multiple
+        // shifts and masks to produce the length and this is slower than the encode path.
         (70 - (v | 1).leading_zeros() as usize) / 7
     } else {
         9
@@ -38,7 +38,7 @@ const fn tag_prefix(len: usize) -> u64 {
 
 /// Returns the maximum value for a given byte length. Useful for masking out tag bits.
 #[inline(always)]
-const fn max_value(len: usize) -> u64 {
+pub(crate) const fn max_value(len: usize) -> u64 {
     if len >= 9 {
         u64::MAX
     } else {

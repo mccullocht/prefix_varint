@@ -3,17 +3,17 @@
 //! Unlike an [LEB128](https://en.wikipedia.org/wiki/LEB128)-style encoding scheme, this encoding
 //! uses a unary prefix code in the first byte of the value to indicate how many subsequent bytes
 //! need to be read followed by the big endian encoding of any remaining bytes. This improves
-//! coding speed compared to LEB128 by reducing the number of branches required to code longer
-//! values.
+//! coding speed compared to LEB128 by reducing the number of branches evaluated to code longer
+//! values, and allows those branches to be different to improve branch mis-prediction.
 //!
-//! `uvarint` methods code `u64` values, with values closer to zero producing smaller output.
-//! `varint` methods code `i64` values using a [Zigzag](https://en.wikipedia.org/wiki/Variable-length_quantity#Zigzag_encoding)
-//! encoding to ensure that small negative numbers produce small output.
+//! The `PrefixVarInt` trait is implemented for `u64`, `u32`, `u16`, `i64`, `i32`, and `i16`, with
+//! values closer to zero producing small output. Signed values are written using a [Zigzag](https://en.wikipedia.org/wiki/Variable-length_quantity#Zigzag_encoding)
+//! coding to ensure that small negative numbers produce small output.
 //!
-//! Coding methods are provided as extensions to the `bytes::{Buf,BufMut}` traits which are
-//! implemented for common in-memory byte stream types. Lower level methods that operate directly
-//! on pointers are also provided but come with caveats (may overread/overwrite).
+//! `PrefixVarInt` includes methods to code values directly to/from byte slices, but traits are
+//! provided to extend `bytes::{Buf,BufMut}`, and to handle these values in `std::io::{Write,Read}.
 //!
+//! XXX completely rewrite this example.
 //! ```
 //! use bytes::Buf;
 //! use prefix_uvarint::{PrefixVarIntBufMut, PrefixVarIntBuf};
