@@ -2,16 +2,33 @@
 //!
 //! Other types should be shuffled to/from raw values using the `core::Int` trait.
 
+const fn len_slow(v: u64) -> usize {
+    if v < (1 << 63) {
+        // Dividing by 7 triggers an optimization that yield a multiply instruction plus multiple
+        // shifts and masks to produce the value and this is slower than the encode path.
+        (70 - (v | 1).leading_zeros() as usize) / 7
+    } else {
+        9
+    }
+}
+
+const fn compute_len_table() -> [u8; 64] {
+    let mut tbl = [0u8; 64];
+    let mut i = 0;
+    while i < tbl.len() {
+        let v = 1u64 << i;
+        tbl[v.leading_zeros() as usize] = len_slow(v) as u8;
+        i += 1;
+    }
+    tbl
+}
+
+const LEN_TABLE: [u8; 64] = compute_len_table();
+
 /// Return the number of bytes required to encode `v` in `[1,MAX_LEN]`.
 #[inline]
-pub(crate) const fn len(mut v: u64) -> usize {
-    // Mask off the top bit to cap bits_required to a maximum of 63.
-    // This avoids a branch to cap the maximum returned value of MAX_LEN.
-    v |= v >> 1;
-    v &= !(1 << 63);
-    let bits_required = 64 - (v.leading_zeros() as usize);
-    // XXX could avoid saturating sub by doing v | 1.
-    ((bits_required.saturating_sub(1)) / 7) + 1
+pub(crate) const fn len(v: u64) -> usize {
+    LEN_TABLE[(v | 1).leading_zeros() as usize] as usize
 }
 
 #[inline(always)]
