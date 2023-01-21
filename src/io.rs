@@ -1,7 +1,7 @@
 //! Extensions to `std::io` traits to support reading/writing prefix varints.
-use std::io::{BufRead, Error, ErrorKind, Result, Write};
+use std::io::{BufRead, Error, ErrorKind, Read, Result, Write};
 
-use crate::{DecodeError, PrefixVarInt, MAX_LEN};
+use crate::{DecodeError, PrefixVarInt, MAX_1BYTE_TAG, MAX_LEN};
 
 impl From<DecodeError> for Error {
     fn from(value: DecodeError) -> Self {
@@ -13,49 +13,38 @@ impl From<DecodeError> for Error {
     }
 }
 
-/// Extension for `std::io::Write` to write any `PrefixVarInt` type.
-pub trait PrefixVarIntWrite {
-    /// Write a prefix varint to an output stream.
-    fn write_prefix_varint<PV: PrefixVarInt>(&mut self, v: PV) -> Result<()>;
+/// Prefix varint code a value and write it to `w`.
+#[inline]
+pub fn write_prefix_varint<PV: PrefixVarInt, W: Write>(v: PV, w: &mut W) -> Result<()> {
+    w.write_all(v.to_prefix_varint_bytes().as_slice())
 }
 
-/// Implement `PrefixVarIntWrite` for all types that implement `Write`.
-impl<Inner: Write> PrefixVarIntWrite for Inner {
-    #[inline]
-    fn write_prefix_varint<PV: PrefixVarInt>(&mut self, v: PV) -> Result<()> {
-        self.write_all(v.to_prefix_varint_bytes().as_slice())
+/// Read and decode a prefix varint value from `r`.
+/// Prefer `read_prefix_varint_buf()` wherever possible as it should be more efficient.
+#[inline]
+pub fn read_prefix_varint<PV: PrefixVarInt, R: Read>(r: &mut R) -> Result<PV> {
+    let mut buf = [0u8; MAX_LEN];
+    r.read_exact(&mut buf[..1])?;
+    let tag = buf[0];
+    if tag <= MAX_1BYTE_TAG {
+        return PV::from_prefix_varint_raw(tag.into()).ok_or_else(|| DecodeError::Overflow.into());
     }
+    let rem = tag.leading_ones() as usize;
+    r.read_exact(&mut buf[1..(1 + rem)])?;
+    PV::decode_prefix_varint(buf.as_slice())
+        .map(|(v, _)| v)
+        .map_err(|e| e.into())
 }
 
-/// Extension for `std::io::BufRead` to read any `PrefixVarInt` type.
-pub trait PrefixVarIntRead {
-    // Read prefix varint from input, returning the value.
-    fn read_prefix_varint<PV: PrefixVarInt>(&mut self) -> Result<PV>;
-}
-
-/// Implement `PrefixVarIntRead` for all types that implement `BufRead`.
-/// Note that `Read` is not supported -- the input ought to be buffered as reads will be small.
-impl<Inner: BufRead> PrefixVarIntRead for Inner {
-    #[inline]
-    fn read_prefix_varint<PV: PrefixVarInt>(&mut self) -> Result<PV> {
-        let buf = self.fill_buf()?;
-        if buf.len() >= MAX_LEN {
-            let (v, len) = PV::decode_prefix_varint(buf).map_err(Error::from)?;
-            self.consume(len);
-            Ok(v)
-        } else {
-            let mut buf = [0u8; MAX_LEN];
-            self.read_exact(&mut buf[..1])?;
-            let tag = buf[0];
-            if tag <= crate::MAX_1BYTE_TAG {
-                return PV::from_prefix_varint_raw(tag.into())
-                    .ok_or_else(|| DecodeError::Overflow.into());
-            }
-            let rem = tag.leading_ones() as usize;
-            self.read_exact(&mut buf[1..(1 + rem)])?;
-            PV::decode_prefix_varint(buf.as_slice())
-                .map(|(v, _)| v)
-                .map_err(|e| e.into())
-        }
+/// Read and decode a prefix varint value from `r`.
+#[inline]
+pub fn read_prefix_varint_buf<PV: PrefixVarInt, R: BufRead>(r: &mut R) -> Result<PV> {
+    let buf = r.fill_buf()?;
+    if buf.len() >= MAX_LEN {
+        let (v, len) = PV::decode_prefix_varint(buf).map_err(Error::from)?;
+        r.consume(len);
+        Ok(v)
+    } else {
+        read_prefix_varint(r)
     }
 }

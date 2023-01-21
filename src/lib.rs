@@ -16,14 +16,19 @@
 //! XXX completely rewrite this example.
 //! ```
 //! use bytes::Buf;
-//! use prefix_uvarint::{PrefixVarIntBufMut, PrefixVarIntBuf};
+//! use prefix_uvarint::{PrefixVarInt, PrefixVarIntBufMut, PrefixVarIntBuf};
 //!
-//! let mut buf_mut = Vec::new();
+//! // value_buf is the maximum size needed to encode a value.
+//! let mut value_buf = [0u8; prefix_uvarint::MAX_LEN];
+//! assert_eq!(167894u64.encode_prefix_varint(&mut value_buf), 3);
+//! assert_eq!((167894u64, 3), u64::decode_prefix_varint(&value_buf).unwrap());
+//!
+//! let mut buf_mut = vec![];
 //! for v in (0..100).step_by(3) {
 //!   buf_mut.put_prefix_varint(v);
 //! }
 //!
-//! // NB: need a mutable slice to use as VarintBuf
+//! // NB: need a mutable slice to use as PrefixVarIntBufMut
 //! let mut buf = buf_mut.as_slice();
 //! while let Ok(v) = buf.get_prefix_varint::<u64>() {
 //!   assert_eq!(v % 3, 0);
@@ -39,7 +44,7 @@ mod tests;
 
 pub use crate::bytes::{PrefixVarIntBuf, PrefixVarIntBufMut};
 pub use crate::core::{DecodeError, EncodedPrefixVarInt, PrefixVarInt};
-pub use crate::io::{PrefixVarIntRead, PrefixVarIntWrite};
+pub use crate::io::{read_prefix_varint, read_prefix_varint_buf, write_prefix_varint};
 
 /// Maximum number of bytes a single encoded uvarint will occupy.
 pub const MAX_LEN: usize = 9;

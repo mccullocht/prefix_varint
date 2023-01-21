@@ -153,7 +153,7 @@ mod buf {
 
 mod io {
     use super::{generate_array, PrefixVarIntBounds, RANDOM_TEST_LEN};
-    use crate::io::{PrefixVarIntRead, PrefixVarIntWrite};
+    use crate::io::{read_prefix_varint, read_prefix_varint_buf, write_prefix_varint};
 
     macro_rules! test_random_io_write_read {
         ($name:ident, $int:ty) => {
@@ -163,15 +163,22 @@ mod io {
                     let input_values = generate_array(RANDOM_TEST_LEN, min, max);
                     let mut writer: Vec<u8> = Vec::new();
                     for v in input_values.iter() {
-                        writer.write_prefix_varint(*v).unwrap();
+                        write_prefix_varint(*v, &mut writer).unwrap();
                     }
 
                     let mut output_values = Vec::new();
                     let mut reader = writer.as_slice();
-                    while let Ok(v) = reader.read_prefix_varint::<$int>() {
+                    while let Ok(v) = read_prefix_varint::<$int, _>(&mut reader) {
                         output_values.push(v);
                     }
 
+                    assert_eq!(input_values, output_values, "{}..{}", min, max);
+
+                    output_values.clear();
+                    let mut buf_reader = writer.as_slice();
+                    while let Ok(v) = read_prefix_varint_buf::<$int, _>(&mut buf_reader) {
+                        output_values.push(v);
+                    }
                     assert_eq!(input_values, output_values, "{}..{}", min, max);
                 }
             }
