@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use prefix_uvarint::{VarintBuf, VarintBufMut};
+use prefix_uvarint::{PrefixVarInt, PrefixVarIntBuf, PrefixVarIntBufMut};
 use rand::distributions::{Uniform, WeightedIndex};
 use rand::prelude::*;
 
@@ -52,7 +52,7 @@ fn benchmark(c: &mut Criterion) {
                     b.iter(|| {
                         output.clear();
                         for v in iv {
-                            output.put_prefix_uvarint(*v)
+                            output.put_prefix_varint(*v);
                         }
                         assert!(output.len() > 0);
                     });
@@ -61,18 +61,28 @@ fn benchmark(c: &mut Criterion) {
 
             let mut encoded = Vec::with_capacity(ARRAY_LEN * max_bytes);
             for v in input_value.iter().copied() {
-                encoded.put_prefix_uvarint(v);
+                encoded.put_prefix_varint(v);
             }
             g.bench_with_input(
-                format!("max_bytes{}/get_prefix_uvarint", max_bytes),
+                format!("max_bytes{}/get_prefix_varint", max_bytes),
                 encoded.as_slice(),
                 |b, e| {
                     b.iter(|| {
                         let mut b = e;
                         for _ in 0..ARRAY_LEN {
-                            b.get_prefix_uvarint().unwrap();
+                            b.get_prefix_varint::<u64>().unwrap();
                         }
                         assert!(b.is_empty());
+                    })
+                },
+            );
+
+            g.bench_with_input(
+                format!("max_bytes{}/len", max_bytes),
+                &input_value,
+                |b, iv| {
+                    b.iter(|| {
+                        assert!(iv.iter().map(|v| v.prefix_varint_len()).sum::<usize>() > 0);
                     })
                 },
             );
