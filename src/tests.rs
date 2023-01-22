@@ -40,9 +40,9 @@ fn generate_array<V: SampleUniform + Copy>(len: usize, min: V, max: V) -> Vec<V>
 
 const RANDOM_TEST_LEN: usize = 4096;
 
-mod raw {
+mod core {
     use super::PrefixVarIntBounds;
-    use crate::{raw, PrefixVarInt, MAX_LEN};
+    use crate::{DecodeError, PrefixVarInt, MAX_LEN};
 
     #[test]
     fn boundary_coding() {
@@ -53,12 +53,45 @@ mod raw {
             .map(|(i, x)| (i + 1, x))
         {
             assert_eq!(min.prefix_varint_len(), len, "{}", min);
-            assert_eq!(unsafe { raw::encode(min, buf.as_mut_ptr()) }, len);
-            assert_eq!(unsafe { raw::decode(buf.as_ptr()) }, (min, len));
+            assert_eq!(min.encode_prefix_varint(&mut buf), len);
+            assert_eq!((min, len), u64::decode_prefix_varint(&buf).unwrap());
             assert_eq!(max.prefix_varint_len(), len, "{}", max);
-            assert_eq!(unsafe { raw::encode(max, buf.as_mut_ptr()) }, len);
-            assert_eq!(unsafe { raw::decode(buf.as_ptr()) }, (max, len));
+            assert_eq!(max.encode_prefix_varint(&mut buf), len);
+            assert_eq!((max, len), u64::decode_prefix_varint(&buf).unwrap());
         }
+    }
+
+    #[test]
+    fn signed_int() {
+        let mut buf = [0u8; MAX_LEN];
+        let v: i64 = -1;
+        assert_eq!(v.prefix_varint_len(), 1);
+        assert_eq!(v.encode_prefix_varint(&mut buf), 1);
+        assert_eq!((v, 1), i64::decode_prefix_varint(&buf).unwrap());
+    }
+
+    #[test]
+    fn uint16() {
+        let mut buf = [0u8; MAX_LEN];
+        assert_eq!(1024u16.prefix_varint_len(), 2);
+        assert_eq!(1024u16.encode_prefix_varint(&mut buf), 2);
+        assert_eq!((1024u16, 2), u16::decode_prefix_varint(&buf).unwrap());
+
+        // Write something too large and decode it as u16
+        (1u32 << 16).encode_prefix_varint(&mut buf);
+        assert_eq!(Err(DecodeError::Overflow), u16::decode_prefix_varint(&buf));
+    }
+
+    #[test]
+    fn uint32() {
+        let mut buf = [0u8; MAX_LEN];
+        assert_eq!(1048576u32.prefix_varint_len(), 3);
+        assert_eq!(1048576u32.encode_prefix_varint(&mut buf), 3);
+        assert_eq!((1048576u32, 3), u32::decode_prefix_varint(&buf).unwrap());
+
+        // Write something too large and decode it as u16
+        (1u64 << 32).encode_prefix_varint(&mut buf);
+        assert_eq!(Err(DecodeError::Overflow), u32::decode_prefix_varint(&buf));
     }
 }
 
