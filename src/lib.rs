@@ -13,7 +13,6 @@
 //! `PrefixVarInt` includes methods to code values directly to/from byte slices, but traits are
 //! provided to extend `bytes::{Buf,BufMut}`, and to handle these values in `std::io::{Write,Read}.
 //!
-//! XXX completely rewrite this example.
 //! ```
 //! use bytes::Buf;
 //! use prefix_uvarint::{PrefixVarInt, PrefixVarIntBufMut, PrefixVarIntBuf};
