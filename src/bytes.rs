@@ -63,7 +63,10 @@ impl<Inner: Buf> PrefixVarIntBuf for Inner {
             return Err(DecodeError::UnexpectedEob);
         }
 
-        if self.chunk().len() >= MAX_LEN || self.remaining() == self.chunk().len() {
+        if self.chunk().len() >= MAX_LEN {
+            // SAFETY: we checked that the buffer is at least MAX_LEN bytes long
+            // so we can always safely call decode_multibyte and never read
+            // uninitialized memory.
             let (raw, len) = unsafe { raw::decode(self.chunk().as_ptr()) };
             self.advance(len);
             return PV::from_prefix_varint_raw(raw).ok_or(DecodeError::Overflow);
