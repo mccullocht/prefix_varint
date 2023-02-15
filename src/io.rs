@@ -15,14 +15,14 @@ impl From<DecodeError> for Error {
 
 /// Prefix varint code a value and write it to `w`.
 #[inline]
-pub fn write_prefix_varint<PV: PrefixVarInt, W: Write>(v: PV, w: &mut W) -> Result<()> {
+pub fn write_prefix_varint<PV: PrefixVarInt>(v: PV, w: &mut impl Write) -> Result<()> {
     w.write_all(v.to_prefix_varint_bytes().as_slice())
 }
 
 /// Read and decode a prefix varint value from `r`.
 /// Prefer `read_prefix_varint_buf()` wherever possible as it should be more efficient.
 #[inline]
-pub fn read_prefix_varint<PV: PrefixVarInt, R: Read>(r: &mut R) -> Result<PV> {
+pub fn read_prefix_varint<PV: PrefixVarInt>(r: &mut impl Read) -> Result<PV> {
     let mut buf = [0u8; MAX_LEN];
     r.read_exact(&mut buf[..1])?;
     let tag = buf[0];
@@ -38,7 +38,7 @@ pub fn read_prefix_varint<PV: PrefixVarInt, R: Read>(r: &mut R) -> Result<PV> {
 
 /// Read and decode a prefix varint value from `r`.
 #[inline]
-pub fn read_prefix_varint_buf<PV: PrefixVarInt, R: BufRead>(r: &mut R) -> Result<PV> {
+pub fn read_prefix_varint_buf<PV: PrefixVarInt>(r: &mut impl BufRead) -> Result<PV> {
     let buf = r.fill_buf()?;
     if buf.len() >= MAX_LEN {
         let (v, len) = PV::decode_prefix_varint(buf).map_err(Error::from)?;
