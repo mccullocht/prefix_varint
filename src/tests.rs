@@ -201,7 +201,7 @@ mod io {
 
                     let mut output_values = Vec::new();
                     let mut reader = writer.as_slice();
-                    while let Ok(v) = read_prefix_varint::<$int, _>(&mut reader) {
+                    while let Ok(v) = read_prefix_varint::<$int>(&mut reader) {
                         output_values.push(v);
                     }
 
@@ -209,7 +209,7 @@ mod io {
 
                     output_values.clear();
                     let mut buf_reader = writer.as_slice();
-                    while let Ok(v) = read_prefix_varint_buf::<$int, _>(&mut buf_reader) {
+                    while let Ok(v) = read_prefix_varint_buf::<$int>(&mut buf_reader) {
                         output_values.push(v);
                     }
                     assert_eq!(input_values, output_values, "{}..{}", min, max);
