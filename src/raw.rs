@@ -69,13 +69,26 @@ pub(crate) unsafe fn encode_multibyte(v: u64, p: *mut u8) -> usize {
         let tagged = (tag_prefix | v) as u32;
         std::ptr::write_unaligned(p as *mut u32, tagged.to_be());
         4
-    } else if v <= max_value(8) {
-        // This is a shortcut for len() where we assume the result is in 1..=8 (true here)
-        let len = (70 - v.leading_zeros()) as usize / 7;
-        let tag_prefix = tag_prefix(len);
-        let tagged = tag_prefix | (v << (64 - (len * 8)));
+    } else if v <= max_value(5) {
+        let tag_prefix = tag_prefix(5);
+        let tagged = tag_prefix | (v << 24);
         std::ptr::write_unaligned(p as *mut u64, tagged.to_be());
-        len
+        5
+    } else if v <= max_value(6) {
+        let tag_prefix = tag_prefix(6);
+        let tagged = tag_prefix | (v << 16);
+        std::ptr::write_unaligned(p as *mut u64, tagged.to_be());
+        6
+    } else if v <= max_value(7) {
+        let tag_prefix = tag_prefix(7);
+        let tagged = tag_prefix | (v << 8);
+        std::ptr::write_unaligned(p as *mut u64, tagged.to_be());
+        7
+    } else if v <= max_value(8) {
+        let tag_prefix = tag_prefix(8);
+        let tagged = tag_prefix | v;
+        std::ptr::write_unaligned(p as *mut u64, tagged.to_be());
+        8
     } else {
         std::ptr::write(p, u8::MAX);
         std::ptr::write_unaligned(p.add(1) as *mut u64, v.to_be());
