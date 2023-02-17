@@ -122,13 +122,25 @@ pub(crate) unsafe fn decode_multibyte(tag: u8, p: *const u8) -> (u64, usize) {
             u64::from(u32::from_be(std::ptr::read_unaligned(p as *const u32))) & max_value(4),
             4,
         )
-    } else if tag < 0b11111111 {
-        let len = tag.leading_ones() as usize + 1;
-        let shift = (8 - len) * 8;
-        let mask = !(u64::MAX << (len * 7));
+    } else if tag < 0b11111000 {
         (
-            (u64::from_be(std::ptr::read_unaligned(p as *const u64)) >> shift) & mask,
-            len,
+            u64::from_be(std::ptr::read_unaligned(p as *const u64)) >> 24 & max_value(5),
+            5,
+        )
+    } else if tag < 0b11111100 {
+        (
+            u64::from_be(std::ptr::read_unaligned(p as *const u64)) >> 16 & max_value(6),
+            6,
+        )
+    } else if tag < 0b11111110 {
+        (
+            u64::from_be(std::ptr::read_unaligned(p as *const u64)) >> 8 & max_value(7),
+            7,
+        )
+    } else if tag < 0b11111111 {
+        (
+            u64::from_be(std::ptr::read_unaligned(p as *const u64)) & max_value(8),
+            8,
         )
     } else {
         (
