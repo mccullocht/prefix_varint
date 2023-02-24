@@ -100,6 +100,7 @@ pub struct EncodedPrefixVarInt {
     len: u8,
 }
 
+#[allow(clippy::len_without_is_empty)]
 impl EncodedPrefixVarInt {
     fn new(v: u64) -> Self {
         let mut enc = Self::default();
