@@ -186,6 +186,7 @@ mod buf {
 
 mod io {
     use super::{generate_array, PrefixVarIntBounds, RANDOM_TEST_LEN};
+    use crate::core::PrefixVarInt;
     use crate::io::{read_prefix_varint, read_prefix_varint_buf, write_prefix_varint};
 
     macro_rules! test_random_io_write_read {
@@ -196,7 +197,8 @@ mod io {
                     let input_values = generate_array(RANDOM_TEST_LEN, min, max);
                     let mut writer: Vec<u8> = Vec::new();
                     for v in input_values.iter() {
-                        write_prefix_varint(*v, &mut writer).unwrap();
+                        let num_bytes = write_prefix_varint(*v, &mut writer).unwrap();
+                        assert_eq!(num_bytes, (*v).prefix_varint_len());
                     }
 
                     let mut output_values = Vec::new();

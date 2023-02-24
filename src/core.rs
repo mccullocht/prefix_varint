@@ -111,6 +111,11 @@ impl EncodedPrefixVarInt {
     pub fn as_slice(&self) -> &[u8] {
         &self.buf[..(self.len as usize)]
     }
+
+    /// Returns the number of bytes used to encode the value.
+    pub fn len(&self) -> usize {
+        self.len as usize
+    }
 }
 
 impl Default for EncodedPrefixVarInt {
