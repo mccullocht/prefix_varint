@@ -13,10 +13,13 @@ impl From<DecodeError> for Error {
     }
 }
 
-/// Prefix varint code a value and write it to `w`.
+/// Prefix varint code a value and write it to `w`. Returns the number of bytes
+/// written.
 #[inline]
-pub fn write_prefix_varint<PV: PrefixVarInt>(v: PV, w: &mut impl Write) -> Result<()> {
-    w.write_all(v.to_prefix_varint_bytes().as_slice())
+pub fn write_prefix_varint<PV: PrefixVarInt>(v: PV, w: &mut impl Write) -> Result<usize> {
+    let v = v.to_prefix_varint_bytes();
+    w.write_all(v.as_slice())?;
+    Ok(v.len())
 }
 
 /// Read and decode a prefix varint value from `r`.
