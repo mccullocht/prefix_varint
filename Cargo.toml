@@ -4,6 +4,7 @@ version = "0.5.1"
 authors = ["Trevor McCulloch <mccullocht@gmail.com>"]
 edition = "2021"
 description = "Prefix based variable length integer coding."
+documentation = "https://docs.rs/prefix_uvarint"
 license = "MIT OR Apache-2.0"
 keywords = ["integer", "coding", "compression"]
 categories = ["compression"]
