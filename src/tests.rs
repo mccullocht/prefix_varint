@@ -215,6 +215,27 @@ mod buf {
         assert_eq!(iter.next(), Some(Err(DecodeError::Overflow)));
         assert_eq!(iter.next(), None);
     }
+
+    #[test]
+    fn iterator_size_hint() {
+        let decode_data = 70_000u32.to_prefix_varint_bytes();
+        let mut decode_data = decode_data.as_slice();
+        let mut iter = decode_data.iter_prefix_varint::<u32>();
+        assert_eq!(iter.size_hint(), (0, Some(3)));
+        assert_eq!(iter.next(), Some(Ok(70_000)));
+        assert_eq!(iter.size_hint(), (0, Some(0)));
+        // a buf with 10 bytes should have an upper bound of 10 and a lower
+        // bound of int(10/9) = 1
+        let mut decode_data = [0; 10].as_slice();
+        let mut iter = decode_data.iter_prefix_varint::<u32>();
+        assert_eq!(iter.size_hint(), (1, Some(10)));
+        assert_eq!(iter.next(), Some(Ok(0)));
+        assert_eq!(iter.size_hint(), (1, Some(9)));
+        assert_eq!(iter.next(), Some(Ok(0)));
+        // now with fewer than MAX_LEN bytes remaining, we may not produce any
+        // more valid varints, and so the lower bound is 0.
+        assert_eq!(iter.size_hint(), (0, Some(8)));
+    }
 }
 
 mod io {

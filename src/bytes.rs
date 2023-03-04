@@ -178,4 +178,9 @@ where
             None
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let bytes_remaining = self.buf.remaining();
+        (bytes_remaining / MAX_LEN, Some(bytes_remaining))
+    }
 }
