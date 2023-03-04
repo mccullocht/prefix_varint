@@ -182,6 +182,39 @@ mod buf {
             assert_eq!(tag & max, 0);
         }
     }
+
+    #[test]
+    fn iterator_on_buffer_works() {
+        let to_encode = [1, 2, -30, -24_000];
+        let mut buf = vec![];
+        for n in to_encode.iter() {
+            buf.put_prefix_varint(*n);
+        }
+        let mut result = vec![];
+        let mut decode_data = buf.as_slice();
+        for decoded in decode_data.iter_prefix_varint::<i16>() {
+            result.push(decoded.unwrap());
+        }
+        assert_eq!(to_encode, result.as_slice());
+    }
+
+    #[test]
+    fn iterator_on_buffer_handles_eob() {
+        let decode_data = 70_000.to_prefix_varint_bytes();
+        let mut decode_data = &decode_data.as_slice()[..1];
+        let mut iter = decode_data.iter_prefix_varint::<i16>();
+        assert_eq!(iter.next(), Some(Err(DecodeError::UnexpectedEob)));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn iterator_on_buffer_handles_overflow() {
+        let decode_data = 70_000.to_prefix_varint_bytes();
+        let mut decode_data = decode_data.as_slice();
+        let mut iter = decode_data.iter_prefix_varint::<u16>();
+        assert_eq!(iter.next(), Some(Err(DecodeError::Overflow)));
+        assert_eq!(iter.next(), None);
+    }
 }
 
 mod io {
