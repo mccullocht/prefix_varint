@@ -22,6 +22,7 @@ pub trait PrefixVarIntBufMut {
 }
 
 impl<Inner: BufMut> PrefixVarIntBufMut for Inner {
+    /// Writes a `PrefixVarInt` value to the buffer.
     #[inline]
     fn put_prefix_varint<PV: PrefixVarInt>(&mut self, v: PV) {
         let raw = v.to_prefix_varint_raw();
@@ -53,7 +54,70 @@ fn get_prefix_varint_slow<B: Buf>(tag: u8, buf: &mut B) -> Result<u64, DecodeErr
 
 /// Extension for `buf::Buf` to read any `PrefixVarInt` type.
 pub trait PrefixVarIntBuf {
+    /// Reads a `PrefixVarInt` from the buffer. After a successful read, the
+    /// buffer will be advanced by the number of bytes read.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use prefix_uvarint::{PrefixVarIntBufMut, PrefixVarIntBuf};
+    ///
+    /// let to_encode = [1, 2, 400];
+    /// let mut buf = vec![];
+    /// for v in &to_encode {
+    ///    buf.put_prefix_varint(*v);
+    /// }
+    ///
+    /// let mut buf = &buf[..];
+    /// for v in &to_encode {
+    ///   let decoded = buf.get_prefix_varint::<u16>().unwrap();
+    ///   assert_eq!(decoded, *v);
+    /// }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an `UnexpectedEob` error if the buffer is empty or if the buffer
+    /// is not long enough to contain the full encoded value.
+    ///
+    /// Returns an `Overflow` error if the encoded value is larger than the
+    /// maximum value that can be represented by the `PrefixVarInt` type.
     fn get_prefix_varint<PV: PrefixVarInt>(&mut self) -> Result<PV, DecodeError>;
+
+    // iter_prefix_varint method
+    /// Returns an iterator over `PrefixVarInt` values in the buffer.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use prefix_uvarint::{PrefixVarIntBufMut, PrefixVarIntBuf};
+    ///
+    /// let to_encode = [1, 2, -30, -24_000];
+    /// let mut buf = vec![];
+    /// for n in to_encode.iter() {
+    ///     buf.put_prefix_varint(*n);
+    /// }
+    /// let mut result = vec![];
+    /// let mut decode_data = buf.as_slice();
+    /// for decoded in decode_data.iter_prefix_varint::<i16>() {
+    ///     result.push(decoded.unwrap());
+    /// }
+    /// assert_eq!(to_encode, result.as_slice());
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an `UnexpectedEob` error if the buffer is empty or if the buffer
+    /// is not long enough to contain the full encoded value.
+    ///
+    /// Returns an `Overflow` error if the encoded value is larger than the
+    /// maximum value that can be represented by the `PrefixVarInt` type.
+    fn iter_prefix_varint<PV: PrefixVarInt>(&mut self) -> PrefixVarIntIter<'_, Self, PV>
+    where
+        Self: Sized,
+    {
+        PrefixVarIntIter::new(self)
+    }
 }
 
 impl<Inner: Buf> PrefixVarIntBuf for Inner {
@@ -79,5 +143,44 @@ impl<Inner: Buf> PrefixVarIntBuf for Inner {
             PV::from_prefix_varint_raw(get_prefix_varint_slow(tag, self)?)
                 .ok_or(DecodeError::Overflow)
         }
+    }
+}
+
+/// An iterator over `PrefixVarInt` values in a `Buf`.
+pub struct PrefixVarIntIter<'a, B, PV> {
+    buf: &'a mut B,
+    _marker: std::marker::PhantomData<PV>,
+}
+
+// new method
+impl<'a, B, PV> PrefixVarIntIter<'a, B, PV> {
+    /// Creates a new `PrefixVarIntIter`.
+    pub fn new(buf: &'a mut B) -> Self {
+        Self {
+            buf,
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<'a, B, PV> Iterator for PrefixVarIntIter<'a, B, PV>
+where
+    B: Buf,
+    PV: PrefixVarInt,
+{
+    type Item = Result<PV, DecodeError>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.buf.has_remaining() {
+            Some(self.buf.get_prefix_varint())
+        } else {
+            None
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let bytes_remaining = self.buf.remaining();
+        (bytes_remaining / MAX_LEN, Some(bytes_remaining))
     }
 }

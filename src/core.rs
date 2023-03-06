@@ -103,7 +103,10 @@ pub struct EncodedPrefixVarInt {
 #[allow(clippy::len_without_is_empty)]
 impl EncodedPrefixVarInt {
     fn new(v: u64) -> Self {
-        let mut enc = Self::default();
+        let mut enc = Self {
+            buf: [0u8; MAX_LEN],
+            len: 0,
+        };
         let len = unsafe { raw::encode(v, enc.buf.as_mut_ptr()) };
         enc.len = len as u8;
         enc
@@ -116,15 +119,6 @@ impl EncodedPrefixVarInt {
     /// Returns the number of bytes used to encode the value.
     pub fn len(&self) -> usize {
         self.len as usize
-    }
-}
-
-impl Default for EncodedPrefixVarInt {
-    fn default() -> Self {
-        Self {
-            buf: [0u8; MAX_LEN],
-            len: 0,
-        }
     }
 }
 
