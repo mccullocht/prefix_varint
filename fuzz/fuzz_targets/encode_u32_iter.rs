@@ -14,12 +14,12 @@ fuzz_target!(|data: &[u8]| {
         dst.put_prefix_varint(n);
     }
 
-    let mut src = &dst[..];
+    let src = &dst[..];
     let iter = src.iter_prefix_varint::<u32>();
     for (decoded, truth) in iter.zip(decoded.iter()) {
         assert_eq!(decoded.unwrap(), *truth);
     }
-    
+
     // check that the iterator is exhausted
     assert!(src.iter_prefix_varint::<u32>().next().is_none());
 });
