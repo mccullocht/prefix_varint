@@ -237,6 +237,20 @@ mod buf {
         // more valid varints, and so the lower bound is 0.
         assert_eq!(iter.size_hint(), (0, Some(8)));
     }
+
+    #[test]
+    fn iterator_continues_after_error() {
+        let to_encode = [1u32, 70_000, 2];
+        let mut buf = vec![];
+        for n in to_encode.iter() {
+            buf.put_prefix_varint(*n);
+        }
+        let mut decode_data = buf.as_slice();
+        let mut iter = decode_data.iter_prefix_varint::<u16>();
+        assert_eq!(iter.next(), Some(Ok(1)));
+        assert_eq!(iter.next(), Some(Err(DecodeError::Overflow)));
+        assert_eq!(iter.next(), Some(Ok(2)));
+    }
 }
 
 mod io {
