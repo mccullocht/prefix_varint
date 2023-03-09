@@ -96,6 +96,8 @@ mod core {
 }
 
 mod buf {
+    use std::collections::VecDeque;
+
     use super::{generate_array, PrefixVarIntBounds, RANDOM_TEST_LEN};
     use crate::{
         DecodeError, PrefixVarInt, PrefixVarIntBuf, PrefixVarIntBufMut, MAX_VALUE, TAG_PREFIX,
@@ -192,7 +194,7 @@ mod buf {
             buf.put_prefix_varint(*n);
         }
         let mut result = vec![];
-        let mut decode_data = buf.as_slice();
+        let decode_data = buf.as_slice();
         for decoded in decode_data.iter_prefix_varint::<i16>() {
             result.push(decoded.unwrap());
         }
@@ -200,9 +202,52 @@ mod buf {
     }
 
     #[test]
+    fn iterator_on_vec_works() {
+        let to_encode = [1, 2, -30, -24_000];
+        let mut buf = vec![];
+        for n in to_encode.iter() {
+            buf.put_prefix_varint(*n);
+        }
+        let mut result = vec![];
+        for decoded in buf.iter_prefix_varint::<i16>() {
+            result.push(decoded.unwrap());
+        }
+    }
+
+    #[test]
+    fn iterator_on_vec_deq_works() {
+        let to_encode = [1, 2, -30, -24_000];
+        let mut buf = vec![];
+        for n in to_encode.iter() {
+            buf.put_prefix_varint(*n);
+        }
+        let mut result = vec![];
+        let buf = VecDeque::from(buf);
+        for decoded in buf.iter_prefix_varint::<i16>() {
+            result.push(decoded.unwrap());
+        }
+    }
+
+    #[test]
+    fn iterator_on_bytes_buf_works() {
+        let to_encode = [1, 2, -30, -24_000];
+        let mut buf = vec![];
+        for n in to_encode.iter() {
+            buf.put_prefix_varint(*n);
+        }
+        let mut result = vec![];
+        bytes::Bytes::from(buf)
+            .iter_prefix_varint::<i16>()
+            .for_each(|decoded| {
+                result.push(decoded.unwrap());
+            });
+        assert_eq!(to_encode, result.as_slice());
+    }
+
+    #[test]
     fn iterator_on_buffer_handles_eob() {
         let decode_data = 70_000.to_prefix_varint_bytes();
-        let mut decode_data = &decode_data.as_slice()[..1];
+        let decode_data = &decode_data.as_slice()[..1];
         let mut iter = decode_data.iter_prefix_varint::<i16>();
         assert_eq!(iter.next(), Some(Err(DecodeError::UnexpectedEob)));
         assert_eq!(iter.next(), None);
@@ -211,7 +256,7 @@ mod buf {
     #[test]
     fn iterator_on_buffer_handles_overflow() {
         let decode_data = 70_000.to_prefix_varint_bytes();
-        let mut decode_data = decode_data.as_slice();
+        let decode_data = decode_data.as_slice();
         let mut iter = decode_data.iter_prefix_varint::<u16>();
         assert_eq!(iter.next(), Some(Err(DecodeError::Overflow)));
         assert_eq!(iter.next(), None);
@@ -220,14 +265,14 @@ mod buf {
     #[test]
     fn iterator_size_hint() {
         let decode_data = 70_000u32.to_prefix_varint_bytes();
-        let mut decode_data = decode_data.as_slice();
+        let decode_data = decode_data.as_slice();
         let mut iter = decode_data.iter_prefix_varint::<u32>();
         assert_eq!(iter.size_hint(), (0, Some(3)));
         assert_eq!(iter.next(), Some(Ok(70_000)));
         assert_eq!(iter.size_hint(), (0, Some(0)));
         // a buf with 10 bytes should have an upper bound of 10 and a lower
         // bound of int(10/9) = 1
-        let mut decode_data = [0; 10].as_slice();
+        let decode_data = [0; 10].as_slice();
         let mut iter = decode_data.iter_prefix_varint::<u32>();
         assert_eq!(iter.size_hint(), (1, Some(10)));
         assert_eq!(iter.next(), Some(Ok(0)));
@@ -245,7 +290,7 @@ mod buf {
         for n in to_encode.iter() {
             buf.put_prefix_varint(*n);
         }
-        let mut decode_data = buf.as_slice();
+        let decode_data = buf.as_slice();
         let mut iter = decode_data.iter_prefix_varint::<u16>();
         assert_eq!(iter.next(), Some(Ok(1)));
         assert_eq!(iter.next(), Some(Err(DecodeError::Overflow)));

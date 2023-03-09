@@ -112,7 +112,7 @@ pub trait PrefixVarIntBuf {
     ///
     /// Returns an `Overflow` error if the encoded value is larger than the
     /// maximum value that can be represented by the `PrefixVarInt` type.
-    fn iter_prefix_varint<PV: PrefixVarInt>(&mut self) -> PrefixVarIntIter<'_, PV, Self>
+    fn iter_prefix_varint<PV: PrefixVarInt>(self) -> PrefixVarIntIter<PV, Self>
     where
         Self: Sized,
     {
@@ -148,15 +148,15 @@ impl<Inner: Buf> PrefixVarIntBuf for Inner {
 
 /// An iterator over `PrefixVarInt` values in a `Buf`.
 #[derive(Debug)]
-pub struct PrefixVarIntIter<'a, PV, B> {
-    buf: &'a mut B,
+pub struct PrefixVarIntIter<PV, B> {
+    buf: B,
     _marker: std::marker::PhantomData<PV>,
 }
 
 // new method
-impl<'a, PV, B> PrefixVarIntIter<'a, PV, B> {
+impl<PV, B> PrefixVarIntIter<PV, B> {
     /// Creates a new `PrefixVarIntIter`.
-    pub fn new(buf: &'a mut B) -> Self {
+    pub fn new(buf: B) -> Self {
         Self {
             buf,
             _marker: std::marker::PhantomData,
@@ -164,7 +164,7 @@ impl<'a, PV, B> PrefixVarIntIter<'a, PV, B> {
     }
 }
 
-impl<'a, PV, B> Iterator for PrefixVarIntIter<'a, PV, B>
+impl<PV, B> Iterator for PrefixVarIntIter<PV, B>
 where
     B: Buf,
     PV: PrefixVarInt,
