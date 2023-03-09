@@ -147,6 +147,7 @@ impl<Inner: Buf> PrefixVarIntBuf for Inner {
 }
 
 /// An iterator over `PrefixVarInt` values in a `Buf`.
+#[derive(Debug)]
 pub struct PrefixVarIntIter<'a, PV, B> {
     buf: &'a mut B,
     _marker: std::marker::PhantomData<PV>,
