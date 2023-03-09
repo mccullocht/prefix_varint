@@ -104,6 +104,7 @@ mod buf {
     macro_rules! test_random_buf_put_get {
         ($int:ty, $name:ident) => {
             #[test]
+            #[cfg_attr(miri, ignore)]
             fn $name() {
                 for (min, max) in <$int>::prefix_varint_bounds() {
                     let input_values = generate_array(RANDOM_TEST_LEN, min, max);
@@ -246,6 +247,7 @@ mod io {
     macro_rules! test_random_io_write_read {
         ($name:ident, $int:ty) => {
             #[test]
+            #[cfg_attr(miri, ignore)]
             fn $name() {
                 for (min, max) in <$int>::prefix_varint_bounds() {
                     let input_values = generate_array(RANDOM_TEST_LEN, min, max);
