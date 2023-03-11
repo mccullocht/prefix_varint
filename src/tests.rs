@@ -208,10 +208,16 @@ mod buf {
         for n in to_encode.iter() {
             buf.put_prefix_varint(*n);
         }
-        let mut result = vec![];
-        for decoded in buf.iter_prefix_varint::<i16>() {
-            result.push(decoded.unwrap());
-        }
+        assert_eq!(buf.len(), 6);
+        assert_eq!(
+            to_encode,
+            buf.iter_prefix_varint::<i16>()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()
+                .as_slice()
+        );
+        // check that buf was not consumed
+        assert_eq!(buf.len(), 6);
     }
 
     #[test]
@@ -221,11 +227,14 @@ mod buf {
         for n in to_encode.iter() {
             buf.put_prefix_varint(*n);
         }
-        let mut result = vec![];
         let buf = VecDeque::from(buf);
-        for decoded in buf.iter_prefix_varint::<i16>() {
-            result.push(decoded.unwrap());
-        }
+        assert_eq!(
+            to_encode,
+            buf.iter_prefix_varint::<i16>()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()
+                .as_slice()
+        );
     }
 
     #[test]
