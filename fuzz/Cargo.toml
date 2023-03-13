@@ -33,8 +33,20 @@ test = false
 doc = false
 
 [[bin]]
+name = "encode_u32_iter"
+path = "fuzz_targets/encode_u32_iter.rs"
+test = false
+doc = false
+
+[[bin]]
 name = "decode_u32"
 path = "fuzz_targets/decode_u32.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "decode_u32_iter"
+path = "fuzz_targets/decode_u32_iter.rs"
 test = false
 doc = false
 

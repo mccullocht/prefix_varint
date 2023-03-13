@@ -41,7 +41,7 @@ mod raw;
 #[cfg(test)]
 mod tests;
 
-pub use crate::bytes::{PrefixVarIntBuf, PrefixVarIntBufMut};
+pub use crate::bytes::{PrefixVarIntBuf, PrefixVarIntBufMut, PrefixVarIntIter};
 pub use crate::core::{DecodeError, EncodedPrefixVarInt, PrefixVarInt};
 pub use crate::io::{read_prefix_varint, read_prefix_varint_buf, write_prefix_varint};
 
