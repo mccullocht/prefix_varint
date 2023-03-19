@@ -1,6 +1,7 @@
 //! Extensions to `std::io` traits to support reading/writing prefix varints.
 use std::io::{BufRead, Error, ErrorKind, Read, Result, Write};
 
+use crate::raw::{encode_multibyte_writer_skip_2, max_value, tag_prefix};
 use crate::{DecodeError, PrefixVarInt, MAX_1BYTE_TAG, MAX_LEN};
 
 impl From<DecodeError> for Error {
@@ -17,9 +18,15 @@ impl From<DecodeError> for Error {
 /// written.
 #[inline]
 pub fn write_prefix_varint<PV: PrefixVarInt>(v: PV, w: &mut impl Write) -> Result<usize> {
-    let v = v.to_prefix_varint_bytes();
-    w.write_all(v.as_slice())?;
-    Ok(v.len())
+    let v = v.to_prefix_varint_raw();
+    if v <= max_value(1) {
+        return w.write_all(&[v as u8]).map(|_| 1);
+    } else if v <= max_value(2) {
+        let tag_prefix = tag_prefix(2) >> 48;
+        let tagged = (v | tag_prefix) as u16;
+        return w.write_all(&tagged.to_be_bytes()).map(|_| 2);
+    }
+    encode_multibyte_writer_skip_2(v, w)
 }
 
 /// Read and decode a prefix varint value from `r`.
