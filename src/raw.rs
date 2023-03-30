@@ -2,6 +2,10 @@
 //!
 //! Other types should be shuffled to/from raw values using the `core::Int` trait.
 
+use std::io::Write;
+
+use crate::MAX_LEN;
+
 const fn len_slow(v: u64) -> usize {
     if v < (1 << 63) {
         // Dividing by 7 triggers an optimization that yields a multiply instruction plus multiple
@@ -32,7 +36,7 @@ pub(crate) const fn len(v: u64) -> usize {
 }
 
 #[inline(always)]
-const fn tag_prefix(len: usize) -> u64 {
+pub(crate) const fn tag_prefix(len: usize) -> u64 {
     !(u64::MAX >> (len - 1))
 }
 
@@ -108,6 +112,56 @@ pub unsafe fn encode(v: u64, p: *mut u8) -> usize {
         1
     } else {
         encode_multibyte(v, p)
+    }
+}
+
+/// Encodes a raw value as prefix uvarint to `w`. This function is the slow path
+/// for writing when the value is too large to fit in 1 or 2 bytes. Those cases
+/// are handled inline in the `Write` impl.
+///
+/// This is kept here to try and keep the code as close to the other encode
+/// multibyte function as possible.
+#[inline(never)]
+pub(crate) fn encode_multibyte_writer_skip_2(
+    v: u64,
+    w: &mut impl Write,
+) -> Result<usize, std::io::Error> {
+    if v <= max_value(3) {
+        let tag_prefix = tag_prefix(3) >> 32;
+        let tagged = (tag_prefix | (v << 8)) as u32;
+        w.write_all(&tagged.to_be_bytes()[..3])?;
+        Ok(3)
+    } else if v <= max_value(4) {
+        let tag_prefix = tag_prefix(4) >> 32;
+        let tagged = (tag_prefix | v) as u32;
+        w.write_all(&tagged.to_be_bytes()[..4])?;
+        Ok(4)
+    } else if v <= max_value(5) {
+        let tag_prefix = tag_prefix(5);
+        let tagged = tag_prefix | (v << 24);
+        w.write_all(&tagged.to_be_bytes()[..5])?;
+        Ok(5)
+    } else if v <= max_value(6) {
+        let tag_prefix = tag_prefix(6);
+        let tagged = tag_prefix | (v << 16);
+        w.write_all(&tagged.to_be_bytes()[..6])?;
+        Ok(6)
+    } else if v <= max_value(7) {
+        let tag_prefix = tag_prefix(7);
+        let tagged = tag_prefix | (v << 8);
+        w.write_all(&tagged.to_be_bytes()[..7])?;
+        Ok(7)
+    } else if v <= max_value(8) {
+        let tag_prefix = tag_prefix(8);
+        let tagged = tag_prefix | v;
+        w.write_all(&tagged.to_be_bytes())?;
+        Ok(8)
+    } else {
+        let mut buf = [0u8; MAX_LEN];
+        buf[0] = u8::MAX;
+        buf[1..].copy_from_slice(&v.to_be_bytes());
+        w.write_all(&buf)?;
+        Ok(9)
     }
 }
 

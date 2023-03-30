@@ -113,7 +113,9 @@ impl EncodedPrefixVarInt {
     }
 
     pub fn as_slice(&self) -> &[u8] {
-        &self.buf[..self.len()]
+        // SAFETY: `self.buf` is initialized to the correct length in `new()`.
+        // from_raw_parts is used over slice indexing to avoid bounds checks.
+        unsafe { std::slice::from_raw_parts(self.buf.as_ptr(), self.len as usize) }
     }
 
     /// Returns the number of bytes used to encode the value.
